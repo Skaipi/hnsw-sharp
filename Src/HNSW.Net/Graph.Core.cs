@@ -1,4 +1,4 @@
-﻿// <copyright file="Graph.Core.cs" company="Microsoft">
+// <copyright file="Graph.Core.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -47,15 +47,20 @@ namespace HNSW.Net
                 switch (Parameters.NeighbourHeuristic)
                 {
                     case NeighbourSelectionHeuristic.SelectSimple:
-                    {
-                        Algorithm = new Algorithms.Algorithm3<TItem, TDistance>(this);
-                        break;
-                    }
+                        {
+                            Algorithm = new Algorithms.Algorithm3<TItem, TDistance>(this);
+                            break;
+                        }
                     case NeighbourSelectionHeuristic.SelectHeuristic:
-                    {
-                        Algorithm = new Algorithms.Algorithm4<TItem, TDistance>(this);
-                        break;
-                    }
+                        {
+                            Algorithm = new Algorithms.Algorithm4<TItem, TDistance>(this);
+                            break;
+                        }
+                    case NeighbourSelectionHeuristic.CustomHeuristic:
+                        {
+                            Algorithm = new Algorithms.Algorithm5<TItem, TDistance>(this);
+                            break;
+                        }
                 }
 
                 if (Parameters.EnableDistanceCacheForConstruction)

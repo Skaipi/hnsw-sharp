@@ -20,7 +20,7 @@ namespace HNSW.Net
         internal struct Searcher
         {
             private readonly Core Core;
-            private readonly List<int> ExpansionBuffer;
+            private readonly List<ValueTuple<TDistance, int>> ExpansionBuffer;
             private readonly VisitedBitSet VisitedSet;
 
             /// <summary>
@@ -30,7 +30,7 @@ namespace HNSW.Net
             internal Searcher(Core core)
             {
                 Core = core;
-                ExpansionBuffer = new List<int>();
+                ExpansionBuffer = new List<ValueTuple<TDistance, int>>();
                 VisitedSet = new VisitedBitSet(core.Nodes.Count);
             }
 
@@ -45,7 +45,7 @@ namespace HNSW.Net
             /// <param name="k">The number of the nearest neighbours to get from the layer.</param>
             /// <param name="version">The version of the graph, will retry the search if the version changed</param>
             /// <returns>The number of expanded nodes during the run.</returns>
-            internal int RunKnnAtLayer(int entryPointId, TravelingCosts<int, TDistance> targetCosts, List<int> resultList, int layer, int k, ref long version, long versionAtStart, Func<int, bool> keepResult, CancellationToken cancellationToken = default)
+            internal List<ValueTuple<TDistance, int>> RunKnnAtLayer(int entryPointId, TravelingCosts<int, TDistance> travelingCosts, int layer, int k, ref long version, long versionAtStart, Func<int, bool> keepResult, CancellationToken cancellationToken = default)
             {
                 /*
                  * v ← ep // set of visited elements
@@ -69,39 +69,38 @@ namespace HNSW.Net
                  */
 
                 // prepare tools
-                IComparer<int> fartherIsOnTop = targetCosts;
-                IComparer<int> closerIsOnTop = fartherIsOnTop.Reverse();
+                Func<int, int, TDistance> distFnc = Core.GetDistance;
+                var fartherIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => x.Item1.CompareTo(y.Item1));
+                var closerIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => -x.Item1.CompareTo(y.Item1));
 
-                // prepare collections
-                // TODO: Optimize by providing buffers
-                var resultHeap    = new BinaryHeap<int>(resultList, fartherIsOnTop);
-                var expansionHeap = new BinaryHeap<int>(ExpansionBuffer, closerIsOnTop);
+                var topCandidates = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(k), fartherIsOnTop);
+                var expansionHeap = new BinaryHeap<ValueTuple<TDistance, int>>(ExpansionBuffer, closerIsOnTop);
 
+                var entry = (travelingCosts.From(entryPointId), entryPointId);
                 if (keepResult(entryPointId))
                 {
-                    resultHeap.Push(entryPointId);
+                    topCandidates.Push(entry);
                 }
+                expansionHeap.Push(entry);
 
-                expansionHeap.Push(entryPointId);
                 VisitedSet.Add(entryPointId);
 
                 try
                 {
                     // run bfs
-                    int visitedNodesCount = 1;
                     while (expansionHeap.Buffer.Count > 0)
                     {
                         if (cancellationToken.IsCancellationRequested)
                         {
-                            return visitedNodesCount;
+                            return topCandidates.Buffer;
                         }
 
                         GraphChangedException.ThrowIfChanged(ref version, versionAtStart);
 
                         // get next candidate to check and expand
-                        var toExpandId = expansionHeap.Pop();
-                        var farthestResultId = resultHeap.Buffer.Count > 0 ? resultHeap.Buffer[0] : -1;
-                        if (farthestResultId > 0 && DistanceUtils.GreaterThan(targetCosts.From(toExpandId), targetCosts.From(farthestResultId)))
+                        (var toExpandDistance, var toExpandId) = expansionHeap.Pop();
+                        (var farthestResultDistance, var farthestResultId) = topCandidates.Buffer.Count > 0 ? topCandidates.Buffer[0] : (default, -1);
+                        if (farthestResultId > 0 && DistanceUtils.GreaterThan(toExpandDistance, farthestResultDistance) && topCandidates.Count >= k)
                         {
                             // the closest candidate is farther than farthest result
                             break;
@@ -114,44 +113,38 @@ namespace HNSW.Net
                         {
                             if (cancellationToken.IsCancellationRequested)
                             {
-                                return visitedNodesCount;
+                                return topCandidates.Buffer;
                             }
 
                             int neighbourId = neighboursIds[i];
+                            if (VisitedSet.Contains(neighbourId)) continue;
 
-                            if (!VisitedSet.Contains(neighbourId))
+
+                            var neighbourDistance = travelingCosts.From(neighbourId);
+                            // enqueue perspective neighbours to expansion list
+                            (farthestResultDistance, farthestResultId) = topCandidates.Buffer.Count > 0 ? topCandidates.Buffer[0] : (default, -1);
+
+                            if (topCandidates.Buffer.Count < k || (farthestResultId >= 0 && DistanceUtils.LowerThan(neighbourDistance, farthestResultDistance)))
                             {
-                                // enqueue perspective neighbours to expansion list
-                                farthestResultId = resultHeap.Buffer.Count > 0 ? resultHeap.Buffer[0] : -1;
-                                if (resultHeap.Buffer.Count < k || (farthestResultId >= 0 && DistanceUtils.LowerThan(targetCosts.From(neighbourId), targetCosts.From(farthestResultId))))
+                                expansionHeap.Push((neighbourDistance, neighbourId));
+
+                                if (keepResult(neighbourId))
                                 {
-                                    expansionHeap.Push(neighbourId);
-                                    
-                                    if (keepResult(neighbourId))
-                                    {
-                                        resultHeap.Push(neighbourId);
-                                    }
-
-                                    if (resultHeap.Buffer.Count > k)
-                                    {
-                                        resultHeap.Pop();
-                                    }
+                                    topCandidates.Push((neighbourDistance, neighbourId));
                                 }
-
-                                // update visited list
-                                ++visitedNodesCount;
-                                VisitedSet.Add(neighbourId);
                             }
+
+                            // update visited list
+                            VisitedSet.Add(neighbourId);
                         }
                     }
 
                     ExpansionBuffer.Clear();
                     VisitedSet.Clear();
 
-                    
-                    return visitedNodesCount;
+                    return topCandidates.Buffer;
                 }
-                catch (Exception ex) 
+                catch
                 {
                     //Throws if the collection changed, otherwise propagates the original exception
                     GraphChangedException.ThrowIfChanged(ref version, versionAtStart);

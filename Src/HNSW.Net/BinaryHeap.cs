@@ -8,6 +8,7 @@ namespace HNSW.Net
     using System;
     using System.Collections.Generic;
     using System.Diagnostics.CodeAnalysis;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// Binary heap wrapper around the <see cref="IList{T}"/> It's a max-heap implementation i.e. the maximum element is always on top. But the order of elements can be customized by providing <see cref="IComparer{T}"/> instance.
@@ -19,6 +20,7 @@ namespace HNSW.Net
         internal IComparer<T> Comparer;
         internal List<T> Buffer;
         internal bool Any => Buffer.Count > 0;
+        internal int Count => Buffer.Count;
         internal BinaryHeap(List<T> buffer) : this(buffer, Comparer<T>.Default) { }
         internal BinaryHeap(List<T> buffer, IComparer<T> comparer)
         {
@@ -27,10 +29,17 @@ namespace HNSW.Net
             for (int i = 1; i < Buffer.Count; ++i) { SiftUp(i); }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Push(T item)
         {
             Buffer.Add(item);
             SiftUp(Buffer.Count - 1);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal T Top()
+        {
+            return Buffer[0];
         }
 
         internal T Pop()
@@ -53,6 +62,7 @@ namespace HNSW.Net
         /// Restores the heap property starting from i'th position down to the bottom given that the downstream items fulfill the rule.
         /// </summary>
         /// <param name="i">The position of item where heap property is violated.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SiftDown(int i)
         {
             while (i < Buffer.Count)
@@ -79,6 +89,7 @@ namespace HNSW.Net
         /// Restores the heap property starting from i'th position up to the head given that the upstream items fulfill the rule.
         /// </summary>
         /// <param name="i">The position of item where heap property is violated.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SiftUp(int i)
         {
             while (i > 0)

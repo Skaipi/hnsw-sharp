@@ -16,6 +16,7 @@ namespace HNSW.Net
     {
         [Key(0)]
         public List<List<int>> Connections;
+        public List<List<int>> InConnections;
 
         [Key(1)] public int Id;
 

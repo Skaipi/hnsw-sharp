@@ -23,22 +23,26 @@ namespace HNSW.Net
             }
 
             /// <inheritdoc/>
-            internal override List<int> SelectBestForConnecting(List<int> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
+            internal override List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
             {
                 /*
                  * q ← this
                  * return M nearest elements from C to q
                  */
 
+
                 // !NO COPY! in-place selection
                 var bestN = GetM(layer);
-                var candidatesHeap = new BinaryHeap<int>(candidatesIds, travelingCosts);
+
+                var fartherIsOnTop = Comparer<(TDistance Distance, int Index)>.Create((x, y) => x.Distance.CompareTo(y.Distance));
+
+                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, fartherIsOnTop);
                 while (candidatesHeap.Buffer.Count > bestN)
                 {
-                    candidatesHeap.Pop();
+                    var discardedCandidate = candidatesHeap.Pop();
                 }
 
-                return candidatesHeap.Buffer;
+                return candidatesHeap.Buffer.ConvertAll(x => x.Item2);
             }
         }
     }

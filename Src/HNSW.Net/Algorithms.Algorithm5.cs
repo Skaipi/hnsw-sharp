@@ -12,19 +12,19 @@ namespace HNSW.Net
             {
             }
 
-            internal override (List<int>, BinaryHeap<int>) SelectBestForConnecting(List<int> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
+            internal override List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
             {
                 var layerM = GetM(layer);
                 if (candidatesIds.Count < layerM)
                 {
-                    return (candidatesIds, new BinaryHeap<int>());
+                    return candidatesIds.ConvertAll(x => x.Item2);
                 }
 
-                IComparer<int> fartherIsOnTop = travelingCosts;
-                IComparer<int> closerIsOnTop = fartherIsOnTop.Reverse();
+                var fartherIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => x.Item1.CompareTo(y.Item1));
+                var closerIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => -x.Item1.CompareTo(y.Item1));
 
-                var resultList = new List<int>(layerM + 1);
-                var candidatesHeap = new BinaryHeap<int>(candidatesIds, closerIsOnTop);
+                var resultList = new List<ValueTuple<TDistance, int>>(layerM + 1);
+                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, closerIsOnTop);
 
                 while (candidatesHeap.Count > 0)
                 {
@@ -32,15 +32,15 @@ namespace HNSW.Net
                         break;
 
                     var currentCandidate = candidatesHeap.Pop();
-                    var candidateDist = travelingCosts.From(currentCandidate);
+                    var candidateDist = currentCandidate.Item1;
 
-                    if (resultList.All(connectedNode => DistanceUtils.GreaterThan(travelingCosts.From(connectedNode), candidateDist)))
+                    if (resultList.All(connectedNode => DistanceUtils.GreaterThan(connectedNode.Item1, candidateDist)))
                     {
                         resultList.Add(currentCandidate);
                     }
                 }
 
-                return (resultList, new BinaryHeap<int>());
+                return resultList.ConvertAll(x => x.Item2);
             }
         }
     }

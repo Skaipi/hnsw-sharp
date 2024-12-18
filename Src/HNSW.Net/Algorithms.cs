@@ -1,4 +1,4 @@
-﻿// <copyright file="Node.cs" company="Microsoft">
+// <copyright file="Node.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -36,17 +36,20 @@ namespace HNSW.Net
             internal virtual Node NewNode(int nodeId, int maxLayer)
             {
                 var connections = new List<List<int>>(maxLayer + 1);
+                var inConnections = new List<List<int>>(maxLayer + 1);
                 for (int layer = 0; layer <= maxLayer; ++layer)
                 {
                     // M + 1 neighbours to not realloc in AddConnection when the level is full
                     int layerM = GetM(layer) + 1;
                     connections.Add(new List<int>(layerM));
+                    inConnections.Add(new List<int>(layerM));
                 }
 
                 return new Node
                 {
                     Id = nodeId,
-                    Connections = connections
+                    Connections = connections,
+                    InConnections = inConnections,
                 };
             }
 
@@ -57,7 +60,7 @@ namespace HNSW.Net
             /// <param name="travelingCosts">Traveling costs to compare candidates.</param>
             /// <param name="layer">The layer of the neighbourhood.</param>
             /// <returns>Best nodes selected from the candidates.</returns>
-            internal abstract List<int> SelectBestForConnecting(List<int> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer);
+            internal abstract List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer);
 
             /// <summary>
             /// Get maximum allowed connections for the given level.
@@ -87,11 +90,34 @@ namespace HNSW.Net
             internal void Connect(Node node, Node neighbour, int layer)
             {
                 var nodeLayer = node[layer];
-                nodeLayer.Add(neighbour.Id);
+                node.Connections[layer].Add(neighbour.Id);
+                neighbour.InConnections[layer].Add(node.Id);
                 if (nodeLayer.Count > GetM(layer))
                 {
-                    var travelingCosts = new TravelingCosts<int, TDistance>(NodeDistance, node.Id);
-                    node[layer] = SelectBestForConnecting(nodeLayer, travelingCosts, layer);
+                    foreach (var neighbourId in node.Connections[layer])
+                    {
+                        GraphCore.Nodes[neighbourId].InConnections[layer].Remove(node.Id);
+                    }
+
+                    Func<int, int, TDistance> distFnc = GraphCore.GetDistance;
+                    var nodeTravelingCost = new TravelingCosts<int, TDistance>(GraphCore.GetDistance, node.Id);
+                    var candidates = new List<ValueTuple<TDistance, int>>(node.Connections[layer].Count);
+                    foreach (var neighbourId in node.Connections[layer])
+                    {
+                        candidates.Add((distFnc(neighbourId, node.Id), neighbourId));
+                    }
+
+                    var selectedCandidates = GraphCore.Algorithm.SelectBestForConnecting(candidates, nodeTravelingCost, layer);
+                    node.Connections[layer] = selectedCandidates;
+
+                    foreach (var neighbourId in node.Connections[layer])
+                    {
+                        GraphCore.Nodes[neighbourId].InConnections[layer].Add(node.Id);
+                    }
+                }
+            }
+
+            internal void Disconnect(Node node, Node neighbour, int layer);
                 }
             }
         }
