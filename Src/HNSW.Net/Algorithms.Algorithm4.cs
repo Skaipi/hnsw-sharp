@@ -51,14 +51,9 @@ namespace HNSW.Net
                  * return R
                  */
 
-                Func<int, int, TDistance> distFnc = GraphCore.GetDistance;
-                var fartherIsOnTop = Comparer<(TDistance Distance, int Index)>.Create((x, y) => x.Distance.CompareTo(y.Distance));
-                var closerIsOnTop = Comparer<(TDistance Distance, int Index)>.Create((x, y) => -x.Distance.CompareTo(y.Distance));
-
                 var layerM = GetM(layer);
-
-                var resultHeap = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(layerM + 1), fartherIsOnTop);
-                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, closerIsOnTop);
+                var resultHeap = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(layerM + 1), GraphCore.FartherIsOnTop);
+                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, GraphCore.CloserIsOnTop);
 
                 // expand candidates option is enabled
                 if (GraphCore.Parameters.ExpandBestSelection)
@@ -73,7 +68,7 @@ namespace HNSW.Net
                         {
                             if (!visited.Contains(candidateNeighbourId))
                             {
-                                toAdd.Add((distFnc(candidateNeighbourId, travelingCosts.Destination), candidateNeighbourId));
+                                toAdd.Add((travelingCosts.From(candidateNeighbourId), candidateNeighbourId));
                                 visited.Add(candidateNeighbourId);
                             }
                         }
@@ -85,7 +80,7 @@ namespace HNSW.Net
                 }
 
                 // main stage of moving candidates to result
-                var discardedHeap = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(candidatesHeap.Buffer.Count), closerIsOnTop);
+                var discardedHeap = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(candidatesHeap.Buffer.Count), GraphCore.CloserIsOnTop);
                 while (candidatesHeap.Buffer.Any() && resultHeap.Buffer.Count < layerM)
                 {
                     (var candidateDist, var candidateId) = candidatesHeap.Pop();

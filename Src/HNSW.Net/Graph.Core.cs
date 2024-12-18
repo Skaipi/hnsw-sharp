@@ -33,6 +33,8 @@ namespace HNSW.Net
             internal Algorithms.Algorithm<TItem, TDistance> Algorithm { get; private set; }
 
             internal SmallWorld<TItem, TDistance>.Parameters Parameters { get; private set; }
+            internal IComparer<(TDistance, int)> FartherIsOnTop;
+            internal IComparer<(TDistance, int)> CloserIsOnTop;
 
             internal float DistanceCacheHitRate => (float)(DistanceCache?.HitCount ?? 0) / DistanceCalculationsCount;
 
@@ -65,6 +67,9 @@ namespace HNSW.Net
                             break;
                         }
                 }
+
+                FartherIsOnTop = new DistanceComparer<TDistance>();
+                CloserIsOnTop = new ReverseDistanceComparer<TDistance>();
 
                 if (Parameters.EnableDistanceCacheForConstruction)
                 {

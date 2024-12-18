@@ -23,6 +23,8 @@ namespace HNSW.Net
             private readonly List<ValueTuple<TDistance, int>> ExpansionBuffer;
             private readonly VisitedBitSet VisitedSet;
 
+
+
             /// <summary>
             /// Initializes a new instance of the <see cref="Searcher"/> struct.
             /// </summary>
@@ -67,14 +69,8 @@ namespace HNSW.Net
                  *           remove furthest element from W to q
                  * return W
                  */
-
-                // prepare tools
-                Func<int, int, TDistance> distFnc = Core.GetDistance;
-                var fartherIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => x.Item1.CompareTo(y.Item1));
-                var closerIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => -x.Item1.CompareTo(y.Item1));
-
-                var topCandidates = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(k), fartherIsOnTop);
-                var expansionHeap = new BinaryHeap<ValueTuple<TDistance, int>>(ExpansionBuffer, closerIsOnTop);
+                var topCandidates = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(k), Core.FartherIsOnTop);
+                var expansionHeap = new BinaryHeap<ValueTuple<TDistance, int>>(ExpansionBuffer, Core.CloserIsOnTop);
 
                 var entry = (travelingCosts.From(entryPointId), entryPointId);
                 if (keepResult(entryPointId))

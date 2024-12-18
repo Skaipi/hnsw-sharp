@@ -20,11 +20,8 @@ namespace HNSW.Net
                     return candidatesIds.ConvertAll(x => x.Item2);
                 }
 
-                var fartherIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => x.Item1.CompareTo(y.Item1));
-                var closerIsOnTop = Comparer<ValueTuple<TDistance, int>>.Create((x, y) => -x.Item1.CompareTo(y.Item1));
-
                 var resultList = new List<ValueTuple<TDistance, int>>(layerM + 1);
-                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, closerIsOnTop);
+                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, GraphCore.CloserIsOnTop);
 
                 while (candidatesHeap.Count > 0)
                 {
