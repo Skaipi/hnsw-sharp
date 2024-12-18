@@ -32,7 +32,7 @@ namespace HNSW.Net
                     var currentCandidate = candidatesHeap.Pop();
                     var candidateDist = currentCandidate.Item1;
 
-                    if (resultList.All(connectedNode => DistanceUtils.GreaterThan(connectedNode.Item1, candidateDist)))
+                    if (resultList.All(connectedNode => connectedNode.Item1 > candidateDist))
                     {
                         resultList.Add(currentCandidate);
                     }

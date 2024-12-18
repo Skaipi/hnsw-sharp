@@ -87,7 +87,7 @@ namespace HNSW.Net
                     (var candidateDist, var candidateId) = candidatesHeap.Pop();
                     (var farthestResultDist, var farthestResultId) = resultHeap.Buffer.FirstOrDefault();
 
-                    if (!resultHeap.Buffer.Any() || DistanceUtils.LowerThan(candidateDist, farthestResultDist))
+                    if (!resultHeap.Buffer.Any() || candidateDist < farthestResultDist)
                     {
                         resultHeap.Push((candidateDist, candidateId));
                     }

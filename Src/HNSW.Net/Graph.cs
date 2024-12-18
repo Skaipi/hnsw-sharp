@@ -301,7 +301,7 @@ namespace HNSW.Net
                     {
                         int cand = connections[i];
                         var d = dstTravelingCost.From(cand);
-                        if (DistanceUtils.LowerThan(d, currDist))
+                        if (d < currDist)
                         {
                             currDist = d;
                             bestPeer = GraphCore.Nodes[cand];
