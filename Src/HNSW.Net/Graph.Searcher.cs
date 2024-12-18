@@ -1,4 +1,4 @@
-﻿// <copyright file="Graph.Searcher.cs" company="Microsoft">
+// <copyright file="Graph.Searcher.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -69,37 +69,34 @@ namespace HNSW.Net
                  *           remove furthest element from W to q
                  * return W
                  */
-                var topCandidates = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(k), Core.FartherIsOnTop);
-                var expansionHeap = new BinaryHeap<ValueTuple<TDistance, int>>(ExpansionBuffer, Core.CloserIsOnTop);
+                var topCandidates = new BinaryHeap<ValueTuple<TDistance, int>>(new List<(TDistance, int)>(k), Core.FartherIsOnTop);
+                var candidates = new BinaryHeap<ValueTuple<TDistance, int>>(ExpansionBuffer, Core.CloserIsOnTop);
 
                 var entry = (travelingCosts.From(entryPointId), entryPointId);
-                if (keepResult(entryPointId))
-                {
-                    topCandidates.Push(entry);
-                }
                 (var farthestResultDist, var farthestResultId) = entry;
-                expansionHeap.Push(entry);
+
+                topCandidates.Push(entry);
+                candidates.Push(entry);
                 VisitedSet.Add(entryPointId);
 
                 try
                 {
                     // run bfs
-                    while (expansionHeap.Buffer.Count > 0)
+                    while (candidates.Buffer.Count > 0)
                     {
                         // get next candidate to check and expand
-                        (var closestCandidateDist, var closestCandidateId) = expansionHeap.Buffer[0];
-                        if (farthestResultId > 0 && closestCandidateDist > farthestResultDist && topCandidates.Count >= k)
+                        (var closestCandidateDist, var closestCandidateId) = candidates.Buffer[0];
+                        if (closestCandidateDist > farthestResultDist && topCandidates.Count >= k)
                         {
                             break;
                         }
-                        expansionHeap.Pop(); // Delay heap reordering in case of early break 
+                        candidates.Pop(); // Delay heap reordering in case of early break 
 
                         // expand candidate
                         var neighboursIds = Core.Nodes[closestCandidateId][layer];
 
                         for (int i = 0; i < neighboursIds.Count; ++i)
                         {
-
                             int neighbourId = neighboursIds[i];
                             if (VisitedSet.Contains(neighbourId)) continue;
 
@@ -108,10 +105,8 @@ namespace HNSW.Net
                             // enqueue perspective neighbours to expansion list
                             if (topCandidates.Buffer.Count < k || neighbourDistance < farthestResultDist)
                             {
-                                expansionHeap.Push((neighbourDistance, neighbourId));
-
-                                if (keepResult(neighbourId))
-                                    topCandidates.Push((neighbourDistance, neighbourId));
+                                candidates.Push((neighbourDistance, neighbourId));
+                                topCandidates.Push((neighbourDistance, neighbourId));
                                 if (topCandidates.Buffer.Count > k)
                                     topCandidates.Pop();
                                 if (topCandidates.Buffer.Count > 0)

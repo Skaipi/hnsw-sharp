@@ -106,7 +106,6 @@ namespace HNSW.Net
                     {
                         var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, _ => true);
                         var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(topCandidates, currentNodeTravelingCosts, layer);
-                        bestPeer = GraphCore.Nodes[bestNeighboursIds[0]]; // Best peer is at top of the heap
 
                         for (int i = 0; i < bestNeighboursIds.Count; ++i)
                         {
@@ -126,9 +125,6 @@ namespace HNSW.Net
                         entryPoint = currentNode;
                         EntryPoint = entryPoint;
                     }
-
-                    // report distance cache hit rate
-                    GraphBuildEventSource.Instance?.CoreGetDistanceCacheHitRateReporter?.Invoke(GraphCore.DistanceCacheHitRate);
                 }
                 progressReporter?.Progress(nodeId - startIndex, GraphCore.Nodes.Count - startIndex);
             }
@@ -252,7 +248,7 @@ namespace HNSW.Net
                         var bestPeer = FindEntryPoint(0, destinationTravelingCosts);
                         int visitedNodesCount = 0;
 
-                        var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, destinationTravelingCosts, 0, k, ref _version, versionNow, keepResultInner, cancellationToken);
+                        var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, destinationTravelingCosts, 0, k, ref _version, versionNow, keepResultInner);
 
                         GraphSearchEventSource.Instance?.GraphKNearestVisitedNodesReporter?.Invoke(visitedNodesCount);
 

@@ -21,10 +21,6 @@ namespace HNSW.Net
         {
             private readonly Func<TItem, TItem, TDistance> Distance;
 
-            private readonly DistanceCache<TDistance> DistanceCache;
-
-            private long DistanceCalculationsCount;
-
             internal List<Node> Nodes { get; private set; }
 
             internal Dictionary<int, TItem> Items { get; private set; }
@@ -36,8 +32,6 @@ namespace HNSW.Net
             internal SmallWorld<TItem, TDistance>.Parameters Parameters { get; private set; }
             internal IComparer<(TDistance, int)> FartherIsOnTop;
             internal IComparer<(TDistance, int)> CloserIsOnTop;
-
-            internal float DistanceCacheHitRate => (float)(DistanceCache?.HitCount ?? 0) / DistanceCalculationsCount;
 
             internal Core(Func<TItem, TItem, TDistance> distance, SmallWorld<TItem, TDistance>.Parameters parameters)
             {
@@ -71,23 +65,12 @@ namespace HNSW.Net
 
                 FartherIsOnTop = new DistanceComparer<TDistance>();
                 CloserIsOnTop = new ReverseDistanceComparer<TDistance>();
-
-                if (Parameters.EnableDistanceCacheForConstruction)
-                {
-                    DistanceCache = new DistanceCache<TDistance>();
-                    DistanceCache.Resize(parameters.InitialDistanceCacheSize, false);
-                }
-
-                DistanceCalculationsCount = 0;
             }
 
             internal IReadOnlyList<int> AddItems(IReadOnlyList<TItem> items, IProvideRandomValues generator)
             {
                 int newCount = items.Count;
                 var newIDs = new List<int>();
-                // TODO: Disable cache in online mode
-                DistanceCache?.Resize(newCount, false);
-
                 int index = 0;
                 foreach (int vacantId in RemovedIndexes)
                 {
@@ -106,11 +89,6 @@ namespace HNSW.Net
                     newIDs.Add(newId);
                 }
                 return newIDs;
-            }
-
-            internal void ResizeDistanceCache(int newSize)
-            {
-                DistanceCache?.Resize(newSize, true);
             }
 
             internal void Serialize(Stream stream)
@@ -134,20 +112,6 @@ namespace HNSW.Net
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal TDistance GetDistance(int fromId, int toId)
-            {
-                DistanceCalculationsCount++;
-                if (DistanceCache is object)
-                {
-                    return DistanceCache.GetOrCacheValue(fromId, toId, GetDistanceSkipCache);
-                }
-                else
-                {
-                    return Distance(Items[fromId], Items[toId]);
-                }
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private TDistance GetDistanceSkipCache(int fromId, int toId)
             {
                 return Distance(Items[fromId], Items[toId]);
             }

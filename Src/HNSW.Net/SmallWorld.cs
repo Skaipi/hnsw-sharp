@@ -227,7 +227,7 @@ namespace HNSW.Net
             Graph.GraphCore.ResizeDistanceCache(newSize);
         }
 
-        [MessagePackObject(keyAsPropertyName:true)]
+        [MessagePackObject(keyAsPropertyName: true)]
         public class Parameters
         {
             public Parameters()
@@ -238,7 +238,6 @@ namespace HNSW.Net
                 ConstructionPruning = 200;
                 ExpandBestSelection = false;
                 KeepPrunedConnections = false;
-                EnableDistanceCacheForConstruction = true;
                 InitialDistanceCacheSize = 1024 * 1024;
                 InitialItemsSize = 1024;
             }
@@ -274,11 +273,6 @@ namespace HNSW.Net
             /// Gets or sets a value indicating whether to keep pruned candidates if <see cref="NeighbourSelectionHeuristic.SelectHeuristic"/> is used. See 'keepPrunedConnections' parameter in the article.
             /// </summary>
             public bool KeepPrunedConnections { get; set; }
-
-            /// <summary>
-            /// Gets or sets a value indicating whether to cache calculated distances at graph construction time.
-            /// </summary>
-            public bool EnableDistanceCacheForConstruction { get; set; }
 
             /// <summary>
             /// Gets or sets a the initial distance cache size. 
