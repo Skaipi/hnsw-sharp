@@ -8,6 +8,7 @@ namespace HNSW.Net
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Numerics;
 
     internal partial class Algorithms
     {
@@ -17,7 +18,7 @@ namespace HNSW.Net
         /// </summary>
         /// <typeparam name="TItem">The typeof the items in the small world.</typeparam>
         /// <typeparam name="TDistance">The type of the distance in the small world.</typeparam>
-        internal sealed class Algorithm4<TItem, TDistance> : Algorithm<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+        internal sealed class Algorithm4<TItem, TDistance> : Algorithm<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
         {
             public Algorithm4(Graph<TItem, TDistance>.Core graphCore) : base(graphCore)
             {
@@ -52,8 +53,8 @@ namespace HNSW.Net
                  */
 
                 var layerM = GetM(layer);
-                var resultHeap = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(layerM + 1), GraphCore.FartherIsOnTop);
-                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, GraphCore.CloserIsOnTop);
+                var resultHeap = new BinaryHeap<(TDistance, int)>(new List<ValueTuple<TDistance, int>>(layerM + 1), GraphCore.FartherIsOnTop);
+                var candidatesHeap = new BinaryHeap<(TDistance, int)>(candidatesIds, GraphCore.CloserIsOnTop);
 
                 // expand candidates option is enabled
                 if (GraphCore.Parameters.ExpandBestSelection)

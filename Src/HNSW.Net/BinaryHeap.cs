@@ -29,14 +29,14 @@ namespace HNSW.Net
             for (int i = 1; i < Buffer.Count; ++i) { SiftUp(i); }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Push(T item)
         {
             Buffer.Add(item);
             SiftUp(Buffer.Count - 1);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal T Top()
         {
             return Buffer[0];
@@ -62,54 +62,83 @@ namespace HNSW.Net
         /// Restores the heap property starting from i'th position down to the bottom given that the downstream items fulfill the rule.
         /// </summary>
         /// <param name="i">The position of item where heap property is violated.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SiftDown(int i)
         {
-            while (i < Buffer.Count)
+            // while (i < Buffer.Count)
+            // {
+            //     int l = (i << 1) + 1;
+            //     int r = l + 1;
+            //     if (l >= Buffer.Count)
+            //     {
+            //         break;
+            //     }
+
+            //     int m = r < Buffer.Count && Comparer.Compare(Buffer[l], Buffer[r]) < 0 ? r : l;
+            //     if (Comparer.Compare(Buffer[m], Buffer[i]) <= 0)
+            //     {
+            //         break;
+            //     }
+
+            //     Swap(i, m);
+            //     i = m;
+            // }
+            if (Buffer.Count == 0) return;
+
+            var item = Buffer[i];
+            var half = Buffer.Count >> 1; // Only need to check until the first non-leaf node
+
+            while (i < half)
             {
-                int l = (i << 1) + 1;
-                int r = l + 1;
-                if (l >= Buffer.Count)
-                {
-                    break;
-                }
+                int left = (i << 1) + 1;
+                int right = left + 1;
+                int maxChild = (right < Buffer.Count && Comparer.Compare(Buffer[left], Buffer[right]) < 0) ? right : left;
 
-                int m = r < Buffer.Count && Comparer.Compare(Buffer[l], Buffer[r]) < 0 ? r : l;
-                if (Comparer.Compare(Buffer[m], Buffer[i]) <= 0)
-                {
+                if (Comparer.Compare(Buffer[maxChild], item) <= 0)
                     break;
-                }
 
-                Swap(i, m);
-                i = m;
+                Buffer[i] = Buffer[maxChild];
+                i = maxChild;
             }
+
+            Buffer[i] = item;
         }
 
         /// <summary>
         /// Restores the heap property starting from i'th position up to the head given that the upstream items fulfill the rule.
         /// </summary>
         /// <param name="i">The position of item where heap property is violated.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SiftUp(int i)
         {
+            // while (i > 0)
+            // {
+            //     int p = (i - 1) >> 1;
+            //     if (Comparer.Compare(Buffer[i], Buffer[p]) <= 0)
+            //     {
+            //         break;
+            //     }
+
+            //     Swap(i, p);
+            //     i = p;
+            // }
+            T item = Buffer[i];
             while (i > 0)
             {
                 int p = (i - 1) >> 1;
-                if (Comparer.Compare(Buffer[i], Buffer[p]) <= 0)
+                T parent = Buffer[p];
+                if (Comparer.Compare(item, parent) <= 0)
                 {
                     break;
                 }
 
-                Swap(i, p);
+                // Move parent down
+                Buffer[i] = parent;
                 i = p;
             }
-        }
 
-        private void Swap(int i, int j)
-        {
-            var temp = Buffer[i];
-            Buffer[i] = Buffer[j];
-            Buffer[j] = temp;
+            // Place the original item at its correct position
+            Buffer[i] = item;
         }
     }
 }

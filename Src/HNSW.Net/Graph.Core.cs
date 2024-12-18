@@ -8,13 +8,14 @@ namespace HNSW.Net
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Numerics;
     using System.Runtime.CompilerServices;
     using System.Threading;
     using MessagePack;
 
     using static HNSW.Net.EventSources;
 
-    internal partial class Graph<TItem, TDistance>
+    internal partial class Graph<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         internal class Core
         {

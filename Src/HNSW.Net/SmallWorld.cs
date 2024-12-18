@@ -9,6 +9,7 @@ namespace HNSW.Net
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
+    using System.Numerics;
     using System.Threading;
     using MessagePack;
     using MessagePackCompat;
@@ -18,7 +19,7 @@ namespace HNSW.Net
     /// </summary>
     /// <typeparam name="TItem">The type of items to connect into small world.</typeparam>
     /// <typeparam name="TDistance">The type of distance between items (expect any numeric type: float, double, decimal, int, ...).</typeparam>
-    public partial class SmallWorld<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+    public partial class SmallWorld<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         private const string SERIALIZATION_HEADER = "HNSW";
         private readonly Func<TItem, TItem, TDistance> Distance;

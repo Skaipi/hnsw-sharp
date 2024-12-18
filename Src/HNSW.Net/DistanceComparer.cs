@@ -2,9 +2,9 @@ namespace HNSW.Net
 {
   using System;
   using System.Collections.Generic;
+  using System.Numerics;
 
-  sealed class DistanceComparer<T> : IComparer<(T, int)>
-    where T : struct, IComparable<T>
+  sealed class DistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
   {
     public int Compare((T, int) x, (T, int) y)
     {
@@ -12,8 +12,7 @@ namespace HNSW.Net
     }
   }
 
-  sealed class ReverseDistanceComparer<T> : IComparer<(T, int)>
-      where T : struct, IComparable<T>
+  sealed class ReverseDistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
   {
     public int Compare((T, int) x, (T, int) y)
     {

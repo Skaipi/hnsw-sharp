@@ -7,6 +7,7 @@ namespace HNSW.Net
 {
     using System;
     using System.Collections.Generic;
+    using System.Numerics;
 
     internal partial class Algorithms
     {
@@ -15,7 +16,7 @@ namespace HNSW.Net
         /// </summary>
         /// <typeparam name="TItem">The typeof the items in the small world.</typeparam>
         /// <typeparam name="TDistance">The type of the distance in the small world.</typeparam>
-        internal abstract class Algorithm<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+        internal abstract class Algorithm<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
         {
             protected readonly Graph<TItem, TDistance>.Core GraphCore;
 

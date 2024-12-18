@@ -14,13 +14,14 @@ namespace HNSW.Net
 
     using static HNSW.Net.EventSources;
     using System.Threading;
+    using System.Numerics;
 
     /// <summary>
     /// The implementation of a hierarchical small world graph.
     /// </summary>
     /// <typeparam name="TItem">The type of items to connect into small world.</typeparam>
     /// <typeparam name="TDistance">The type of distance between items (expects any numeric type: float, double, decimal, int, ...).</typeparam>
-    internal partial class Graph<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+    internal partial class Graph<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         private readonly Func<TItem, TItem, TDistance> Distance;
 

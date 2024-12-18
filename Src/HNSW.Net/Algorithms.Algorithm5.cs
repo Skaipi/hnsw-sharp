@@ -3,10 +3,11 @@ namespace HNSW.Net
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Numerics;
 
     internal partial class Algorithms
     {
-        internal sealed class Algorithm5<TItem, TDistance> : Algorithm<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+        internal sealed class Algorithm5<TItem, TDistance> : Algorithm<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
         {
             public Algorithm5(Graph<TItem, TDistance>.Core graphCore) : base(graphCore)
             {

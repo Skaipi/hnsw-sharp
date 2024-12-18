@@ -77,8 +77,8 @@ namespace HNSW.Net
                 {
                     topCandidates.Push(entry);
                 }
+                (var farthestResultDist, var farthestResultId) = entry;
                 expansionHeap.Push(entry);
-
                 VisitedSet.Add(entryPointId);
 
                 try
@@ -86,48 +86,36 @@ namespace HNSW.Net
                     // run bfs
                     while (expansionHeap.Buffer.Count > 0)
                     {
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            return topCandidates.Buffer;
-                        }
-
-                        GraphChangedException.ThrowIfChanged(ref version, versionAtStart);
-
                         // get next candidate to check and expand
-                        (var toExpandDistance, var toExpandId) = expansionHeap.Pop();
-                        (var farthestResultDistance, var farthestResultId) = topCandidates.Buffer.Count > 0 ? topCandidates.Buffer[0] : (default, -1);
-                        if (farthestResultId > 0 && DistanceUtils.GreaterThan(toExpandDistance, farthestResultDistance) && topCandidates.Count >= k)
+                        (var closestCandidateDist, var closestCandidateId) = expansionHeap.Buffer[0];
+                        if (farthestResultId > 0 && closestCandidateDist > farthestResultDist && topCandidates.Count >= k)
                         {
-                            // the closest candidate is farther than farthest result
                             break;
                         }
+                        expansionHeap.Pop(); // Delay heap reordering in case of early break 
 
                         // expand candidate
-                        var neighboursIds = Core.Nodes[toExpandId][layer];
+                        var neighboursIds = Core.Nodes[closestCandidateId][layer];
 
                         for (int i = 0; i < neighboursIds.Count; ++i)
                         {
-                            if (cancellationToken.IsCancellationRequested)
-                            {
-                                return topCandidates.Buffer;
-                            }
 
                             int neighbourId = neighboursIds[i];
                             if (VisitedSet.Contains(neighbourId)) continue;
 
-
                             var neighbourDistance = travelingCosts.From(neighbourId);
-                            // enqueue perspective neighbours to expansion list
-                            (farthestResultDistance, farthestResultId) = topCandidates.Buffer.Count > 0 ? topCandidates.Buffer[0] : (default, -1);
 
-                            if (topCandidates.Buffer.Count < k || (farthestResultId >= 0 && DistanceUtils.LowerThan(neighbourDistance, farthestResultDistance)))
+                            // enqueue perspective neighbours to expansion list
+                            if (topCandidates.Buffer.Count < k || neighbourDistance < farthestResultDist)
                             {
                                 expansionHeap.Push((neighbourDistance, neighbourId));
 
                                 if (keepResult(neighbourId))
-                                {
                                     topCandidates.Push((neighbourDistance, neighbourId));
-                                }
+                                if (topCandidates.Buffer.Count > k)
+                                    topCandidates.Pop();
+                                if (topCandidates.Buffer.Count > 0)
+                                    (farthestResultDist, farthestResultId) = topCandidates.Buffer[0];
                             }
 
                             // update visited list
