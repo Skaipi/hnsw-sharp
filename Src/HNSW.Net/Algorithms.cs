@@ -1,4 +1,4 @@
-// <copyright file="Node.cs" company="Microsoft">
+﻿// <copyright file="Node.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -117,8 +117,9 @@ namespace HNSW.Net
                 }
             }
 
-            internal void Disconnect(Node node, Node neighbour, int layer);
-                }
+            internal void Disconnect(Node node, Node neighbour, int layer)
+            {
+                neighbour.Connections[layer].Remove(node.Id);
             }
         }
 

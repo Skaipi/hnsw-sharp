@@ -1,4 +1,4 @@
-// <copyright file="Graph.cs" company="Microsoft">
+﻿// <copyright file="Graph.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -133,6 +133,72 @@ namespace HNSW.Net
             }
 
             return newIDs;
+        }
+
+        internal void RecomputeItemAtLayer(int nodeId, int layer)
+        {
+            var searcher = new Searcher(GraphCore);
+            Func<int, int, TDistance> nodeDistance = GraphCore.GetDistance;
+            var bestPeer = EntryPoint ?? GraphCore.Nodes[0];
+
+            var currentNode = GraphCore.Nodes[nodeId];
+            var currentNodeTravelingCosts = new TravelingCosts<int, TDistance>(nodeDistance, nodeId);
+
+            bestPeer = FindEntryPoint(layer, currentNodeTravelingCosts);
+
+            var versionNow = Interlocked.Increment(ref _version);
+            var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, _ => true);
+            var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(topCandidates, currentNodeTravelingCosts, layer);
+
+            for (int i = 0; i < bestNeighboursIds.Count; ++i)
+            {
+                int newNeighbourId = bestNeighboursIds[i];
+                versionNow = Interlocked.Increment(ref _version);
+                GraphCore.Algorithm.Connect(currentNode, GraphCore.Nodes[newNeighbourId], layer);
+
+                versionNow = Interlocked.Increment(ref _version);
+                GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
+            }
+        }
+
+        /// <summary>
+        /// Removes items from the graph.
+        /// </summary>
+        /// <returns></returns>
+        internal int RemoveItem(int itemIndex)
+        {
+            if (GraphCore is null) { throw new Exception("Graph Core set to null reference"); }
+
+            var node = GraphCore.Nodes[itemIndex];
+            if (EntryPoint?.Id == itemIndex)
+            {
+                for (int layer = node.MaxLayer; layer >= 0; layer--)
+                {
+                    if (node[layer].Count > 0)
+                    {
+                        var neighbourId = node[layer][0];
+                        EntryPoint = GraphCore.Nodes[neighbourId];
+                    }
+                }
+            }
+
+            for (int layer_id = 0; layer_id < node.InConnections.Count; layer_id++)
+            {
+                for (int j = 0; j < node.InConnections[layer_id].Count; j++)
+                {
+                    var neighbourId = node.InConnections[layer_id][j];
+                    var neighbourNode = GraphCore.Nodes[neighbourId];
+                    GraphCore.Algorithm.Disconnect(neighbourNode, node, layer_id);
+                    if (neighbourNode.Connections[layer_id].Count < GraphCore.Algorithm.GetM(layer_id) / 2)
+                    {
+                        RecomputeItemAtLayer(neighbourId, layer_id);
+                    }
+                }
+            }
+            // No need to remove item from Nodes as it lost all connections
+            GraphCore.RemovedIndexes.Add(itemIndex);
+
+            return itemIndex;
         }
 
         /// <summary>

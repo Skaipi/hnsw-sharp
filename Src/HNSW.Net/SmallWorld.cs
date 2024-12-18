@@ -1,4 +1,4 @@
-﻿// <copyright file="SmallWorld.cs" company="Microsoft">
+// <copyright file="SmallWorld.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -7,8 +7,6 @@ namespace HNSW.Net
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
-    using System.Diagnostics.CodeAnalysis;
     using System.IO;
     using System.Linq;
     using System.Threading;
@@ -34,13 +32,13 @@ namespace HNSW.Net
         /// Gets the list of items currently held by the SmallWorld graph. 
         /// The list is not protected by any locks, and should only be used when it is known the graph won't change
         /// </summary>
-        public IReadOnlyList<TItem> UnsafeItems => Graph?.GraphCore?.Items;
+        public IReadOnlyDictionary<int, TItem> UnsafeItems => Graph?.GraphCore?.Items;
 
         /// <summary>
         /// Gets a copy of the list of items currently held by the SmallWorld graph. 
         /// This call is protected by a read-lock and is safe to be called from multiple threads.
         /// </summary>
-        public IReadOnlyList<TItem> Items
+        public IReadOnlyDictionary<int, TItem> Items
         {
             get
             {
@@ -49,7 +47,7 @@ namespace HNSW.Net
                     _rwLock.EnterReadLock();
                     try
                     {
-                        return Graph.GraphCore.Items.ToList();
+                        return Graph.GraphCore.Items;
                     }
                     finally
                     {
@@ -88,7 +86,23 @@ namespace HNSW.Net
             _rwLock?.EnterWriteLock();
             try
             {
-               return Graph.AddItems(items, Generator, progressReporter);
+                return Graph.AddItems(items, Generator, progressReporter);
+            }
+            finally
+            {
+                _rwLock?.ExitWriteLock();
+            }
+        }
+
+        /// <summary>
+        /// Removes item from the hnsw graph
+        /// </summary>
+        public void RemoveItem(int itemIndex)
+        {
+            _rwLock?.EnterWriteLock();
+            try
+            {
+                Graph.RemoveItem(itemIndex);
             }
             finally
             {
@@ -170,9 +184,9 @@ namespace HNSW.Net
             {
                 hnswHeader = MessagePackBinary.ReadString(stream);
             }
-            catch(Exception E)
+            catch (Exception E)
             {
-                if(stream.CanSeek) { stream.Position = p0; } //Resets the stream to original position
+                if (stream.CanSeek) { stream.Position = p0; } //Resets the stream to original position
                 throw new InvalidDataException($"Invalid header found in stream, data is corrupted or invalid", E);
             }
 

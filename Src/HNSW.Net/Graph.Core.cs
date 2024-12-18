@@ -1,4 +1,4 @@
-// <copyright file="Graph.Core.cs" company="Microsoft">
+﻿// <copyright file="Graph.Core.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -26,7 +26,9 @@ namespace HNSW.Net
 
             internal List<Node> Nodes { get; private set; }
 
-            internal List<TItem> Items { get; private set; }
+            internal Dictionary<int, TItem> Items { get; private set; }
+
+            internal HashSet<int> RemovedIndexes { get; private set; }
 
             internal Algorithms.Algorithm<TItem, TDistance> Algorithm { get; private set; }
 
@@ -38,11 +40,12 @@ namespace HNSW.Net
             {
                 Distance = distance;
                 Parameters = parameters;
-                
+
                 var initialSize = Math.Max(1024, parameters.InitialItemsSize);
 
+                RemovedIndexes = new HashSet<int>();
                 Nodes = new List<Node>(initialSize);
-                Items = new List<TItem>(initialSize);
+                Items = new Dictionary<int, TItem>(initialSize);
 
                 switch (Parameters.NeighbourHeuristic)
                 {
@@ -75,17 +78,26 @@ namespace HNSW.Net
             internal IReadOnlyList<int> AddItems(IReadOnlyList<TItem> items, IProvideRandomValues generator)
             {
                 int newCount = items.Count;
-
                 var newIDs = new List<int>();
-                Items.AddRange(items);
+                // TODO: Disable cache in online mode
                 DistanceCache?.Resize(newCount, false);
 
-                int id0 = Nodes.Count;
+                int index = 0;
+                foreach (int vacantId in RemovedIndexes)
+                {
+                    Nodes.Add(Algorithm.NewNode(vacantId, RandomLayer(generator, Parameters.LevelLambda)));
+                    Items.Add(vacantId, items[index]);
+                    newIDs.Add(vacantId);
+                    index++;
+                }
 
+                int id0 = Nodes.Count;
                 for (int id = 0; id < newCount; ++id)
                 {
-                    Nodes.Add(Algorithm.NewNode(id0 + id, RandomLayer(generator, Parameters.LevelLambda)));
-                    newIDs.Add(id0 + id);
+                    var newId = id0 + id;
+                    Nodes.Add(Algorithm.NewNode(newId, RandomLayer(generator, Parameters.LevelLambda)));
+                    Items.Add(newId, items[id]);
+                    newIDs.Add(newId);
                 }
                 return newIDs;
             }
@@ -105,7 +117,13 @@ namespace HNSW.Net
                 // readStrict: true -> removed, as not available anymore on MessagePack 2.0 - also probably not necessary anymore
                 //                     see https://github.com/neuecc/MessagePack-CSharp/pull/663
                 Nodes = MessagePackSerializer.Deserialize<List<Node>>(stream);
-                Items.AddRange(items);
+
+                int index = 0;
+                foreach (var node in Nodes)
+                {
+                    Items.Add(node.Id, items[index]);
+                    index++;
+                }
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
