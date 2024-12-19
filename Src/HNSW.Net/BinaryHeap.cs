@@ -29,19 +29,19 @@ namespace HNSW.Net
             for (int i = 1; i < Buffer.Count; ++i) { SiftUp(i); }
         }
 
-        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Push(T item)
         {
             Buffer.Add(item);
             SiftUp(Buffer.Count - 1);
         }
 
-        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal T Top()
         {
             return Buffer[0];
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal T Pop()
         {
             if (Buffer.Count > 0)
@@ -62,27 +62,9 @@ namespace HNSW.Net
         /// Restores the heap property starting from i'th position down to the bottom given that the downstream items fulfill the rule.
         /// </summary>
         /// <param name="i">The position of item where heap property is violated.</param>
-        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SiftDown(int i)
         {
-            // while (i < Buffer.Count)
-            // {
-            //     int l = (i << 1) + 1;
-            //     int r = l + 1;
-            //     if (l >= Buffer.Count)
-            //     {
-            //         break;
-            //     }
-
-            //     int m = r < Buffer.Count && Comparer.Compare(Buffer[l], Buffer[r]) < 0 ? r : l;
-            //     if (Comparer.Compare(Buffer[m], Buffer[i]) <= 0)
-            //     {
-            //         break;
-            //     }
-
-            //     Swap(i, m);
-            //     i = m;
-            // }
             if (Buffer.Count == 0) return;
 
             var item = Buffer[i];
@@ -108,20 +90,9 @@ namespace HNSW.Net
         /// Restores the heap property starting from i'th position up to the head given that the upstream items fulfill the rule.
         /// </summary>
         /// <param name="i">The position of item where heap property is violated.</param>
-        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SiftUp(int i)
         {
-            // while (i > 0)
-            // {
-            //     int p = (i - 1) >> 1;
-            //     if (Comparer.Compare(Buffer[i], Buffer[p]) <= 0)
-            //     {
-            //         break;
-            //     }
-
-            //     Swap(i, p);
-            //     i = p;
-            // }
             T item = Buffer[i];
             while (i > 0)
             {

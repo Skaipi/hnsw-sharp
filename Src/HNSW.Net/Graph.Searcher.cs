@@ -1,4 +1,4 @@
-// <copyright file="Graph.Searcher.cs" company="Microsoft">
+﻿// <copyright file="Graph.Searcher.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -107,8 +107,7 @@ namespace HNSW.Net
                             {
                                 candidates.Push((neighbourDistance, neighbourId));
                                 topCandidates.Push((neighbourDistance, neighbourId));
-                                if (topCandidates.Buffer.Count > k)
-                                    topCandidates.Pop();
+
                                 if (topCandidates.Buffer.Count > 0)
                                     (farthestResultDist, farthestResultId) = topCandidates.Buffer[0];
                             }

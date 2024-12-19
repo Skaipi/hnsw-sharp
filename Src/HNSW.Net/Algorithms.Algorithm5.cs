@@ -21,6 +21,7 @@ namespace HNSW.Net
                     return candidatesIds.ConvertAll(x => x.Item2);
                 }
 
+                Func<int, int, TDistance> distance = GraphCore.GetDistance;
                 var resultList = new List<ValueTuple<TDistance, int>>(layerM + 1);
                 var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, GraphCore.CloserIsOnTop);
 
@@ -32,7 +33,8 @@ namespace HNSW.Net
                     var currentCandidate = candidatesHeap.Pop();
                     var candidateDist = currentCandidate.Item1;
 
-                    if (resultList.All(connectedNode => connectedNode.Item1 > candidateDist))
+                    // Candidate is closer to designated point than any other already connected point (distance to )
+                    if (resultList.TrueForAll(connectedNode => distance(connectedNode.Item2, currentCandidate.Item2) > candidateDist))
                     {
                         resultList.Add(currentCandidate);
                     }

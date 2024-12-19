@@ -1,23 +1,28 @@
 namespace HNSW.Net
 {
-  using System;
-  using System.Collections.Generic;
-  using System.Numerics;
+    using System.Collections.Generic;
+    using System.Numerics;
+    using System.Runtime.CompilerServices;
 
-  sealed class DistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
-  {
-    public int Compare((T, int) x, (T, int) y)
+    sealed class DistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
     {
-      return x.Item1.CompareTo(y.Item1);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Compare((T, int) x, (T, int) y)
+        {
+            if (x.Item1 < y.Item1) return -1;
+            if (x.Item1 > y.Item1) return 1;
+            return x.Item1.CompareTo(y.Item1);
+        }
     }
-  }
 
-  sealed class ReverseDistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
-  {
-    public int Compare((T, int) x, (T, int) y)
+    sealed class ReverseDistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
     {
-      // Simply invert the order by swapping x and y in the CompareTo call
-      return y.Item1.CompareTo(x.Item1);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int Compare((T, int) x, (T, int) y)
+        {
+            if (x.Item1 > y.Item1) return -1;
+            if (x.Item1 < y.Item1) return 1;
+            return y.Item1.CompareTo(x.Item1);
+        }
     }
-  }
 }
