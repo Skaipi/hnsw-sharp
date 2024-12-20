@@ -1,4 +1,4 @@
-// <copyright file="SmallWorld.cs" company="Microsoft">
+﻿// <copyright file="SmallWorld.cs" company="Microsoft">
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 // </copyright>
@@ -219,12 +219,39 @@ namespace HNSW.Net
             return Graph.Print();
         }
 
-        /// <summary>
-        /// Frees the memory used by the Distance Cache
-        /// </summary>
-        public void ResizeDistanceCache(int newSize)
+        public void PrintStats()
         {
-            Graph.GraphCore.ResizeDistanceCache(newSize);
+            var maxLayer = Graph.MaxLayer;
+            Console.WriteLine($"Graph max layer: {maxLayer}\n");
+
+            for (int layer = maxLayer - 1; layer >= 0; layer--)
+            {
+                var M = Graph.GraphCore.Algorithm.GetM(layer);
+                var nodesOnLayer = Graph.GraphCore.Nodes.Where(x => x.MaxLayer >= layer && !Graph.GraphCore.RemovedIndexes.Contains(x.Id)).ToList();
+                Console.WriteLine($"Nodes on layer {layer}: {nodesOnLayer.Count}");
+
+                var minOutConn = nodesOnLayer.Min(x => x.Connections[layer].Count);
+                var maxOutConn = nodesOnLayer.Max(x => x.Connections[layer].Count);
+                var avgOutConn = nodesOnLayer.Average(x => x.Connections[layer].Count);
+                var outConnAboveM = nodesOnLayer.Where(x => x.Connections[layer].Count == M).ToList().Count;
+
+                Console.WriteLine($"  Minimal outgoing connections: {minOutConn}");
+                Console.WriteLine($"  Maximal outgoing connections: {maxOutConn}");
+                Console.WriteLine($"  Average outgoing connections: {avgOutConn}");
+                Console.WriteLine($"  Elements with numeber of outgoing equal M: {outConnAboveM}");
+                Console.WriteLine();
+
+                var minInConn = nodesOnLayer.Min(x => x.InConnections[layer].Count);
+                var maxInConn = nodesOnLayer.Max(x => x.InConnections[layer].Count);
+                var avgInConn = nodesOnLayer.Average(x => x.InConnections[layer].Count);
+                var inConnAboveM = nodesOnLayer.Where(x => x.InConnections[layer].Count > M).ToList().Count;
+
+                Console.WriteLine($"  Minimal incoming connections: {minInConn}");
+                Console.WriteLine($"  Maximal incoming connections: {maxInConn}");
+                Console.WriteLine($"  Average incoming connections: {avgInConn}");
+                Console.WriteLine($"  Elements with numeber of incoming connections above M: {inConnAboveM}");
+                Console.WriteLine();
+            }
         }
 
         [MessagePackObject(keyAsPropertyName: true)]
