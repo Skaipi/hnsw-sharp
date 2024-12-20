@@ -24,7 +24,7 @@ namespace HNSW.Net
             }
 
             /// <inheritdoc/>
-            internal override List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
+            internal override List<int> SelectBestForConnecting(List<NodeDistance<TDistance>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
             {
                 /*
                  * q ← this
@@ -35,15 +35,13 @@ namespace HNSW.Net
                 // !NO COPY! in-place selection
                 var bestN = GetM(layer);
 
-                var fartherIsOnTop = Comparer<(TDistance Distance, int Index)>.Create((x, y) => x.Distance.CompareTo(y.Distance));
-
-                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, fartherIsOnTop);
+                var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(candidatesIds, GraphCore.FartherIsOnTop);
                 while (candidatesHeap.Buffer.Count > bestN)
                 {
                     var discardedCandidate = candidatesHeap.Pop();
                 }
 
-                return candidatesHeap.Buffer.ConvertAll(x => x.Item2);
+                return candidatesHeap.Buffer.ConvertAll(x => x.Id);
             }
         }
     }

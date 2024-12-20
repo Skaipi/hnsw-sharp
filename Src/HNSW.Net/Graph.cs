@@ -252,7 +252,7 @@ namespace HNSW.Net
 
                         GraphSearchEventSource.Instance?.GraphKNearestVisitedNodesReporter?.Invoke(visitedNodesCount);
 
-                        return topCandidates.ConvertAll(c => new SmallWorld<TItem, TDistance>.KNNSearchResult(c.Item2, GraphCore.Items[c.Item2], c.Item1)).ToList();
+                        return topCandidates.ConvertAll(c => new SmallWorld<TItem, TDistance>.KNNSearchResult(c.Id, GraphCore.Items[c.Id], c.Dist)).ToList();
                     }
                 }
                 catch (GraphChangedException)

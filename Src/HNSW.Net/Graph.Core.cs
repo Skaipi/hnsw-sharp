@@ -30,8 +30,8 @@ namespace HNSW.Net
             internal Algorithms.Algorithm<TItem, TDistance> Algorithm { get; private set; }
 
             internal SmallWorld<TItem, TDistance>.Parameters Parameters { get; private set; }
-            internal IComparer<(TDistance, int)> FartherIsOnTop;
-            internal IComparer<(TDistance, int)> CloserIsOnTop;
+            internal IComparer<NodeDistance<TDistance>> FartherIsOnTop;
+            internal IComparer<NodeDistance<TDistance>> CloserIsOnTop;
 
             internal Core(Func<TItem, TItem, TDistance> distance, SmallWorld<TItem, TDistance>.Parameters parameters)
             {

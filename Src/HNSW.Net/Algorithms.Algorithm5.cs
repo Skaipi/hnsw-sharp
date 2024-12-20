@@ -13,17 +13,17 @@ namespace HNSW.Net
             {
             }
 
-            internal override List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
+            internal override List<int> SelectBestForConnecting(List<NodeDistance<TDistance>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
             {
                 var layerM = GetM(layer);
                 if (candidatesIds.Count < layerM)
                 {
-                    return candidatesIds.ConvertAll(x => x.Item2);
+                    return candidatesIds.ConvertAll(x => x.Id);
                 }
 
                 Func<int, int, TDistance> distance = GraphCore.GetDistance;
-                var resultList = new List<ValueTuple<TDistance, int>>(layerM + 1);
-                var candidatesHeap = new BinaryHeap<ValueTuple<TDistance, int>>(candidatesIds, GraphCore.CloserIsOnTop);
+                var resultList = new List<NodeDistance<TDistance>>(layerM + 1);
+                var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(candidatesIds, GraphCore.CloserIsOnTop);
 
                 while (candidatesHeap.Count > 0)
                 {
@@ -31,16 +31,16 @@ namespace HNSW.Net
                         break;
 
                     var currentCandidate = candidatesHeap.Pop();
-                    var candidateDist = currentCandidate.Item1;
+                    var candidateDist = currentCandidate.Dist;
 
-                    // Candidate is closer to designated point than any other already connected point (distance to )
-                    if (resultList.TrueForAll(connectedNode => distance(connectedNode.Item2, currentCandidate.Item2) > candidateDist))
+                    // Candidate is closer to designated point than any other already connected point
+                    if (resultList.TrueForAll(connectedNode => distance(connectedNode.Id, currentCandidate.Id) > candidateDist))
                     {
                         resultList.Add(currentCandidate);
                     }
                 }
 
-                return resultList.ConvertAll(x => x.Item2);
+                return resultList.ConvertAll(x => x.Id);
             }
         }
     }

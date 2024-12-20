@@ -4,25 +4,25 @@ namespace HNSW.Net
     using System.Numerics;
     using System.Runtime.CompilerServices;
 
-    sealed class DistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
+    sealed class DistanceComparer<T> : IComparer<NodeDistance<T>> where T : struct, IFloatingPoint<T>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int Compare((T, int) x, (T, int) y)
+        public int Compare(NodeDistance<T> x, NodeDistance<T> y)
         {
-            if (x.Item1 < y.Item1) return -1;
-            if (x.Item1 > y.Item1) return 1;
-            return x.Item1.CompareTo(y.Item1);
+            if (x.Dist < y.Dist) return -1;
+            if (x.Dist > y.Dist) return 1;
+            return x.Dist.CompareTo(y.Dist);
         }
     }
 
-    sealed class ReverseDistanceComparer<T> : IComparer<(T, int)> where T : IFloatingPoint<T>
+    sealed class ReverseDistanceComparer<T> : IComparer<NodeDistance<T>> where T : struct, IFloatingPoint<T>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int Compare((T, int) x, (T, int) y)
+        public int Compare(NodeDistance<T> x, NodeDistance<T> y)
         {
-            if (x.Item1 > y.Item1) return -1;
-            if (x.Item1 < y.Item1) return 1;
-            return y.Item1.CompareTo(x.Item1);
+            if (x.Dist > y.Dist) return -1;
+            if (x.Dist < y.Dist) return 1;
+            return y.Dist.CompareTo(x.Dist);
         }
     }
 }

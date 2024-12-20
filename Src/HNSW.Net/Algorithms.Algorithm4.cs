@@ -25,7 +25,7 @@ namespace HNSW.Net
             }
 
             /// <inheritdoc/>
-            internal override List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
+            internal override List<int> SelectBestForConnecting(List<NodeDistance<TDistance>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
             {
                 /*
                  * q ← this
@@ -53,23 +53,23 @@ namespace HNSW.Net
                  */
 
                 var layerM = GetM(layer);
-                var resultHeap = new BinaryHeap<(TDistance, int)>(new List<ValueTuple<TDistance, int>>(layerM + 1), GraphCore.FartherIsOnTop);
-                var candidatesHeap = new BinaryHeap<(TDistance, int)>(candidatesIds, GraphCore.CloserIsOnTop);
+                var resultHeap = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(layerM + 1), GraphCore.FartherIsOnTop);
+                var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(candidatesIds, GraphCore.CloserIsOnTop);
 
                 // expand candidates option is enabled
                 if (GraphCore.Parameters.ExpandBestSelection)
                 {
-                    var visited = new HashSet<int>(candidatesHeap.Buffer.ConvertAll(x => x.Item2));
-                    var toAdd = new HashSet<ValueTuple<TDistance, int>>();
+                    var visited = new HashSet<int>(candidatesHeap.Buffer.ConvertAll(x => x.Id));
+                    var toAdd = new HashSet<NodeDistance<TDistance>>();
                     foreach (var candidateTuple in candidatesHeap.Buffer)
                     {
-                        var candidateId = candidateTuple.Item2;
+                        var candidateId = candidateTuple.Id;
                         var candidateNeighborsIDs = GraphCore.Nodes[candidateId][layer];
                         foreach (var candidateNeighbourId in candidateNeighborsIDs)
                         {
                             if (!visited.Contains(candidateNeighbourId))
                             {
-                                toAdd.Add((travelingCosts.From(candidateNeighbourId), candidateNeighbourId));
+                                toAdd.Add(new NodeDistance<TDistance> { Dist = travelingCosts.From(candidateNeighbourId), Id = candidateNeighbourId });
                                 visited.Add(candidateNeighbourId);
                             }
                         }
@@ -81,19 +81,19 @@ namespace HNSW.Net
                 }
 
                 // main stage of moving candidates to result
-                var discardedHeap = new BinaryHeap<ValueTuple<TDistance, int>>(new List<ValueTuple<TDistance, int>>(candidatesHeap.Buffer.Count), GraphCore.CloserIsOnTop);
+                var discardedHeap = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(candidatesHeap.Buffer.Count), GraphCore.CloserIsOnTop);
                 while (candidatesHeap.Buffer.Any() && resultHeap.Buffer.Count < layerM)
                 {
-                    (var candidateDist, var candidateId) = candidatesHeap.Pop();
-                    (var farthestResultDist, var farthestResultId) = resultHeap.Buffer.FirstOrDefault();
+                    var candidate = candidatesHeap.Pop();
+                    var farthestResultDist = resultHeap.Buffer[0].Dist;
 
-                    if (!resultHeap.Buffer.Any() || candidateDist < farthestResultDist)
+                    if (!resultHeap.Buffer.Any() || candidate.Dist < farthestResultDist)
                     {
-                        resultHeap.Push((candidateDist, candidateId));
+                        resultHeap.Push(candidate);
                     }
                     else if (GraphCore.Parameters.KeepPrunedConnections)
                     {
-                        discardedHeap.Push((candidateDist, candidateId));
+                        discardedHeap.Push(candidate);
                     }
                 }
 
@@ -106,7 +106,7 @@ namespace HNSW.Net
                     }
                 }
 
-                return resultHeap.Buffer.ConvertAll(x => x.Item2);
+                return resultHeap.Buffer.ConvertAll(x => x.Id);
             }
         }
     }

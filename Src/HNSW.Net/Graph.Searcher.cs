@@ -20,7 +20,7 @@ namespace HNSW.Net
         internal struct Searcher
         {
             private readonly Core Core;
-            private readonly List<ValueTuple<TDistance, int>> ExpansionBuffer;
+            private readonly List<NodeDistance<TDistance>> ExpansionBuffer;
             private readonly VisitedBitSet VisitedSet;
 
 
@@ -32,7 +32,7 @@ namespace HNSW.Net
             internal Searcher(Core core)
             {
                 Core = core;
-                ExpansionBuffer = new List<ValueTuple<TDistance, int>>();
+                ExpansionBuffer = new List<NodeDistance<TDistance>>();
                 VisitedSet = new VisitedBitSet(core.Nodes.Count);
             }
 
@@ -47,7 +47,7 @@ namespace HNSW.Net
             /// <param name="k">The number of the nearest neighbours to get from the layer.</param>
             /// <param name="version">The version of the graph, will retry the search if the version changed</param>
             /// <returns>The number of expanded nodes during the run.</returns>
-            internal List<ValueTuple<TDistance, int>> RunKnnAtLayer(int entryPointId, TravelingCosts<int, TDistance> travelingCosts, int layer, int k, ref long version, long versionAtStart, Func<int, bool> keepResult, CancellationToken cancellationToken = default)
+            internal List<NodeDistance<TDistance>> RunKnnAtLayer(int entryPointId, TravelingCosts<int, TDistance> travelingCosts, int layer, int k, ref long version, long versionAtStart, Func<int, bool> keepResult, CancellationToken cancellationToken = default)
             {
                 /*
                  * v ← ep // set of visited elements
@@ -69,11 +69,11 @@ namespace HNSW.Net
                  *           remove furthest element from W to q
                  * return W
                  */
-                var topCandidates = new BinaryHeap<ValueTuple<TDistance, int>>(new List<(TDistance, int)>(k), Core.FartherIsOnTop);
-                var candidates = new BinaryHeap<ValueTuple<TDistance, int>>(ExpansionBuffer, Core.CloserIsOnTop);
+                var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), Core.FartherIsOnTop);
+                var candidates = new BinaryHeap<NodeDistance<TDistance>>(ExpansionBuffer, Core.CloserIsOnTop);
 
-                var entry = (travelingCosts.From(entryPointId), entryPointId);
-                (var farthestResultDist, var farthestResultId) = entry;
+                var entry = new NodeDistance<TDistance> { Dist = travelingCosts.From(entryPointId), Id = entryPointId };
+                var farthestResultDist = entry.Dist;
 
                 topCandidates.Push(entry);
                 candidates.Push(entry);
@@ -85,15 +85,15 @@ namespace HNSW.Net
                     while (candidates.Buffer.Count > 0)
                     {
                         // get next candidate to check and expand
-                        (var closestCandidateDist, var closestCandidateId) = candidates.Buffer[0];
-                        if (closestCandidateDist > farthestResultDist && topCandidates.Count >= k)
+                        var closestCandidate = candidates.Buffer[0];
+                        if (closestCandidate.Dist > farthestResultDist && topCandidates.Count >= k)
                         {
                             break;
                         }
                         candidates.Pop(); // Delay heap reordering in case of early break 
 
                         // expand candidate
-                        var neighboursIds = Core.Nodes[closestCandidateId][layer];
+                        var neighboursIds = Core.Nodes[closestCandidate.Id][layer];
 
                         for (int i = 0; i < neighboursIds.Count; ++i)
                         {
@@ -105,14 +105,15 @@ namespace HNSW.Net
                             // enqueue perspective neighbours to expansion list
                             if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
                             {
-                                candidates.Push((neighbourDistance, neighbourId));
-                                topCandidates.Push((neighbourDistance, neighbourId));
+                                var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
+                                candidates.Push(selectedCandidate);
+                                topCandidates.Push(selectedCandidate);
 
                                 if (topCandidates.Count > k)
                                     topCandidates.Pop();
 
                                 if (topCandidates.Count > 0)
-                                    (farthestResultDist, farthestResultId) = topCandidates.Buffer[0];
+                                    farthestResultDist = topCandidates.Buffer[0].Dist;
                             }
 
                             // update visited list

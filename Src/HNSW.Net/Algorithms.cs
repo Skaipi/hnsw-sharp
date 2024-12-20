@@ -61,7 +61,7 @@ namespace HNSW.Net
             /// <param name="travelingCosts">Traveling costs to compare candidates.</param>
             /// <param name="layer">The layer of the neighbourhood.</param>
             /// <returns>Best nodes selected from the candidates.</returns>
-            internal abstract List<int> SelectBestForConnecting(List<ValueTuple<TDistance, int>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer);
+            internal abstract List<int> SelectBestForConnecting(List<NodeDistance<TDistance>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer);
 
             /// <summary>
             /// Get maximum allowed connections for the given level.
@@ -102,10 +102,10 @@ namespace HNSW.Net
 
                     Func<int, int, TDistance> distFnc = GraphCore.GetDistance;
                     var nodeTravelingCost = new TravelingCosts<int, TDistance>(GraphCore.GetDistance, node.Id);
-                    var candidates = new List<ValueTuple<TDistance, int>>(node.Connections[layer].Count);
+                    var candidates = new List<NodeDistance<TDistance>>(node.Connections[layer].Count);
                     foreach (var neighbourId in node.Connections[layer])
                     {
-                        candidates.Add((distFnc(neighbourId, node.Id), neighbourId));
+                        candidates.Add(new NodeDistance<TDistance> { Dist = distFnc(neighbourId, node.Id), Id = neighbourId });
                     }
 
                     var selectedCandidates = GraphCore.Algorithm.SelectBestForConnecting(candidates, nodeTravelingCost, layer);
