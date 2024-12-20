@@ -192,7 +192,7 @@ namespace HNSW.Net
                     }
                 }
             }
-            // No need to remove item from Nodes as it lost all connections
+            // Should I move it to GraphCore?
             GraphCore.RemovedIndexes.Add(itemIndex);
 
             return itemIndex;

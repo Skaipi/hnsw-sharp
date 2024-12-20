@@ -103,12 +103,15 @@ namespace HNSW.Net
                             var neighbourDistance = travelingCosts.From(neighbourId);
 
                             // enqueue perspective neighbours to expansion list
-                            if (topCandidates.Buffer.Count < k || neighbourDistance < farthestResultDist)
+                            if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
                             {
                                 candidates.Push((neighbourDistance, neighbourId));
                                 topCandidates.Push((neighbourDistance, neighbourId));
 
-                                if (topCandidates.Buffer.Count > 0)
+                                if (topCandidates.Count > k)
+                                    topCandidates.Pop();
+
+                                if (topCandidates.Count > 0)
                                     (farthestResultDist, farthestResultId) = topCandidates.Buffer[0];
                             }
 

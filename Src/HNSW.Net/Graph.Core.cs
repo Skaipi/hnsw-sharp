@@ -74,9 +74,10 @@ namespace HNSW.Net
                 int index = 0;
                 foreach (int vacantId in RemovedIndexes)
                 {
-                    Nodes.Add(Algorithm.NewNode(vacantId, RandomLayer(generator, Parameters.LevelLambda)));
+                    Nodes[vacantId] = Algorithm.NewNode(vacantId, RandomLayer(generator, Parameters.LevelLambda));
                     Items.Add(vacantId, items[index]);
                     newIDs.Add(vacantId);
+                    RemovedIndexes.Remove(vacantId);
                     index++;
                 }
 
@@ -85,7 +86,7 @@ namespace HNSW.Net
                 {
                     var newId = id0 + id;
                     Nodes.Add(Algorithm.NewNode(newId, RandomLayer(generator, Parameters.LevelLambda)));
-                    Items.Add(newId, items[id]);
+                    Items.Add(newId, items[id + index]);
                     newIDs.Add(newId);
                 }
                 return newIDs;
