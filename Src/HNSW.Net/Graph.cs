@@ -31,6 +31,8 @@ namespace HNSW.Net
 
         internal int MaxLayer => EntryPoint?.MaxLayer ?? 0;
 
+        internal object EntryLock = new object();
+
         private long _version;
 
         /// <summary>
@@ -114,8 +116,11 @@ namespace HNSW.Net
                             versionNow = Interlocked.Increment(ref _version);
                             GraphCore.Algorithm.Connect(currentNode, GraphCore.Nodes[newNeighbourId], layer);
 
-                            versionNow = Interlocked.Increment(ref _version);
-                            GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
+                            lock (GraphCore.NodesLocks[newNeighbourId])
+                            {
+                                versionNow = Interlocked.Increment(ref _version);
+                                GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
+                            }
                         }
                     }
 
@@ -132,19 +137,17 @@ namespace HNSW.Net
             return newIDs;
         }
 
-        internal void RecomputeItemAtLayer(int nodeId, int layer)
+        internal void RecomputeItemAtLayer(int nodeId, int layer, Node src)
         {
             var searcher = new Searcher(GraphCore);
             Func<int, int, TDistance> nodeDistance = GraphCore.GetDistance;
-            var bestPeer = EntryPoint ?? GraphCore.Nodes[0];
 
             var currentNode = GraphCore.Nodes[nodeId];
             var currentNodeTravelingCosts = new TravelingCosts<int, TDistance>(nodeDistance, nodeId);
-
-            bestPeer = FindEntryPoint(layer, currentNodeTravelingCosts);
+            var bestPeer = FindEntryPoint(layer, currentNodeTravelingCosts);
 
             var versionNow = Interlocked.Increment(ref _version);
-            var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, _ => true);
+            var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, id => id != nodeId);
             var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(topCandidates, currentNodeTravelingCosts, layer);
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
@@ -153,8 +156,11 @@ namespace HNSW.Net
                 versionNow = Interlocked.Increment(ref _version);
                 GraphCore.Algorithm.Connect(currentNode, GraphCore.Nodes[newNeighbourId], layer);
 
-                versionNow = Interlocked.Increment(ref _version);
-                GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
+                lock (GraphCore.NodesLocks[newNeighbourId])
+                {
+                    versionNow = Interlocked.Increment(ref _version);
+                    GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
+                }
             }
         }
 
@@ -173,22 +179,35 @@ namespace HNSW.Net
                 {
                     if (node[layer].Count > 0)
                     {
-                        var neighbourId = node[layer][0];
+                        var neighbourId = node[layer].MaxBy(id => GraphCore.Nodes[id].Connections.Count);
                         EntryPoint = GraphCore.Nodes[neighbourId];
                     }
                 }
             }
 
-            for (int layer_id = 0; layer_id < node.InConnections.Count; layer_id++)
+            var maxLayer = Math.Min(EntryPoint?.MaxLayer ?? int.MaxValue, node.MaxLayer);
+            for (int layer_id = 0; layer_id <= maxLayer; layer_id++)
             {
+                for (int j = 0; j < node.Connections[layer_id].Count; j++)
+                {
+                    var neighbourId = node.Connections[layer_id][j];
+                    var neighbourNode = GraphCore.Nodes[neighbourId];
+
+                    GraphCore.Algorithm.DisconnectIncoming(node, neighbourNode, layer_id);
+                    if (neighbourNode.Connections[layer_id].Count == 0 || neighbourNode.InConnections[layer_id].Count == 0)
+                    {
+                        RecomputeItemAtLayer(neighbourId, layer_id, node);
+                    }
+                }
+
                 for (int j = 0; j < node.InConnections[layer_id].Count; j++)
                 {
                     var neighbourId = node.InConnections[layer_id][j];
                     var neighbourNode = GraphCore.Nodes[neighbourId];
-                    GraphCore.Algorithm.Disconnect(neighbourNode, node, layer_id);
-                    if (neighbourNode.Connections[layer_id].Count < GraphCore.Algorithm.GetM(layer_id) / 2)
+                    GraphCore.Algorithm.Disconnect(node, neighbourNode, layer_id);
+                    if (neighbourNode.Connections[layer_id].Count == 0 || neighbourNode.InConnections[layer_id].Count == 0)
                     {
-                        RecomputeItemAtLayer(neighbourId, layer_id);
+                        RecomputeItemAtLayer(neighbourId, layer_id, node);
                     }
                 }
             }
@@ -290,18 +309,21 @@ namespace HNSW.Net
                 while (changed)
                 {
                     changed = false;
-                    List<int> connections = bestPeer.Connections[level];
-                    int size = connections.Count;
-
-                    for (int i = 0; i < size; i++)
+                    lock (GraphCore.NodesLocks[bestPeer.Id])
                     {
-                        int cand = connections[i];
-                        var d = dstTravelingCost.From(cand);
-                        if (d < currDist)
+                        List<int> connections = bestPeer.Connections[level];
+                        int size = connections.Count;
+
+                        for (int i = 0; i < size; i++)
                         {
-                            currDist = d;
-                            bestPeer = GraphCore.Nodes[cand];
-                            changed = true;
+                            int cand = connections[i];
+                            var d = dstTravelingCost.From(cand);
+                            if (d < currDist)
+                            {
+                                currDist = d;
+                                bestPeer = GraphCore.Nodes[cand];
+                                changed = true;
+                            }
                         }
                     }
                 }

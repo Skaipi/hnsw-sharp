@@ -7,12 +7,13 @@ namespace HNSW.Net
 {
     using System;
     using System.Collections.Generic;
+    using System.Numerics;
     using System.Threading;
 
     /// <content>
     /// The implementation of knn search.
     /// </content>
-    internal partial class Graph<TItem, TDistance>
+    internal partial class Graph<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         /// <summary>
         /// The graph searcher.
@@ -47,7 +48,7 @@ namespace HNSW.Net
             /// <param name="k">The number of the nearest neighbours to get from the layer.</param>
             /// <param name="version">The version of the graph, will retry the search if the version changed</param>
             /// <returns>The number of expanded nodes during the run.</returns>
-            internal List<NodeDistance<TDistance>> RunKnnAtLayer(int entryPointId, TravelingCosts<int, TDistance> travelingCosts, int layer, int k, ref long version, long versionAtStart, Func<int, bool> keepResult, CancellationToken cancellationToken = default)
+            internal List<NodeDistance<TDistance>> RunKnnAtLayer(int entryPointId, TravelingCosts<int, TDistance> travelingCosts, int layer, int k, ref long version, long versionAtStart, Func<int, bool> filterFnc, CancellationToken cancellationToken = default)
             {
                 /*
                  * v ← ep // set of visited elements
@@ -73,9 +74,15 @@ namespace HNSW.Net
                 var candidates = new BinaryHeap<NodeDistance<TDistance>>(ExpansionBuffer, Core.CloserIsOnTop);
 
                 var entry = new NodeDistance<TDistance> { Dist = travelingCosts.From(entryPointId), Id = entryPointId };
+                // TODO: Make it max value of TDistance
                 var farthestResultDist = entry.Dist;
 
-                topCandidates.Push(entry);
+                if (filterFnc(entryPointId))
+                {
+                    topCandidates.Push(entry);
+                    farthestResultDist = entry.Dist;
+                }
+
                 candidates.Push(entry);
                 VisitedSet.Add(entryPointId);
 
@@ -93,31 +100,36 @@ namespace HNSW.Net
                         candidates.Pop(); // Delay heap reordering in case of early break 
 
                         // expand candidate
-                        var neighboursIds = Core.Nodes[closestCandidate.Id][layer];
-
-                        for (int i = 0; i < neighboursIds.Count; ++i)
+                        lock (Core.NodesLocks[closestCandidate.Id])
                         {
-                            int neighbourId = neighboursIds[i];
-                            if (VisitedSet.Contains(neighbourId)) continue;
+                            var neighboursIds = Core.Nodes[closestCandidate.Id][layer];
 
-                            var neighbourDistance = travelingCosts.From(neighbourId);
-
-                            // enqueue perspective neighbours to expansion list
-                            if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
+                            for (int i = 0; i < neighboursIds.Count; ++i)
                             {
-                                var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
-                                candidates.Push(selectedCandidate);
-                                topCandidates.Push(selectedCandidate);
+                                int neighbourId = neighboursIds[i];
+                                if (VisitedSet.Contains(neighbourId)) continue;
 
-                                if (topCandidates.Count > k)
-                                    topCandidates.Pop();
+                                var neighbourDistance = travelingCosts.From(neighbourId);
 
-                                if (topCandidates.Count > 0)
-                                    farthestResultDist = topCandidates.Buffer[0].Dist;
+                                // enqueue perspective neighbours to expansion list
+                                if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
+                                {
+                                    var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
+                                    candidates.Push(selectedCandidate);
+
+                                    if (filterFnc(selectedCandidate.Id))
+                                        topCandidates.Push(selectedCandidate);
+
+                                    if (topCandidates.Count > k)
+                                        topCandidates.Pop();
+
+                                    if (topCandidates.Count > 0)
+                                        farthestResultDist = topCandidates.Buffer[0].Dist;
+                                }
+
+                                // update visited list
+                                VisitedSet.Add(neighbourId);
                             }
-
-                            // update visited list
-                            VisitedSet.Add(neighbourId);
                         }
                     }
 

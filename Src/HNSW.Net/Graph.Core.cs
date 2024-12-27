@@ -6,6 +6,7 @@
 namespace HNSW.Net
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.IO;
     using System.Numerics;
@@ -21,9 +22,15 @@ namespace HNSW.Net
         {
             private readonly Func<TItem, TItem, TDistance> Distance;
 
+            internal List<object> NodesLocks { get; private set; }
+
             internal List<Node> Nodes { get; private set; }
 
-            internal Dictionary<int, TItem> Items { get; private set; }
+            internal object ItemsReadLock { get; private set; }
+
+            internal List<object> ItemsWriteLocks { get; private set; }
+
+            internal ConcurrentDictionary<int, TItem> Items { get; private set; }
 
             internal HashSet<int> RemovedIndexes { get; private set; }
 
@@ -40,9 +47,13 @@ namespace HNSW.Net
 
                 var initialSize = Math.Max(1024, parameters.InitialItemsSize);
 
+                ItemsReadLock = new object();
+                NodesLocks = new List<object>(initialSize);
+                ItemsWriteLocks = new List<object>(65535); // 2^16 - 1
+
                 RemovedIndexes = new HashSet<int>();
                 Nodes = new List<Node>(initialSize);
-                Items = new Dictionary<int, TItem>(initialSize);
+                Items = new ConcurrentDictionary<int, TItem>(65536, initialSize); // 2^16 amount of locks
 
                 switch (Parameters.NeighbourHeuristic)
                 {
@@ -75,7 +86,7 @@ namespace HNSW.Net
                 foreach (int vacantId in RemovedIndexes)
                 {
                     Nodes[vacantId] = Algorithm.NewNode(vacantId, RandomLayer(generator, Parameters.LevelLambda));
-                    Items.Add(vacantId, items[index]);
+                    Items.TryAdd(vacantId, items[index]);
                     newIDs.Add(vacantId);
                     RemovedIndexes.Remove(vacantId);
                     index++;
@@ -85,8 +96,9 @@ namespace HNSW.Net
                 for (int id = 0; id < newCount; ++id)
                 {
                     var newId = id0 + id;
+                    NodesLocks.Add(new object());
                     Nodes.Add(Algorithm.NewNode(newId, RandomLayer(generator, Parameters.LevelLambda)));
-                    Items.Add(newId, items[id + index]);
+                    Items.TryAdd(newId, items[id + index]);
                     newIDs.Add(newId);
                 }
                 return newIDs;
@@ -106,7 +118,7 @@ namespace HNSW.Net
                 int index = 0;
                 foreach (var node in Nodes)
                 {
-                    Items.Add(node.Id, items[index]);
+                    Items.TryAdd(node.Id, items[index]);
                     index++;
                 }
             }

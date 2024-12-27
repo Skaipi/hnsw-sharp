@@ -226,7 +226,7 @@ namespace HNSW.Net
             var maxLayer = Graph.MaxLayer;
             Console.WriteLine($"Graph max layer: {maxLayer}\n");
 
-            for (int layer = maxLayer - 1; layer >= 0; layer--)
+            for (int layer = maxLayer; layer >= 0; layer--)
             {
                 var M = Graph.GraphCore.Algorithm.GetM(layer);
                 var nodesOnLayer = Graph.GraphCore.Nodes.Where(x => x.MaxLayer >= layer && !Graph.GraphCore.RemovedIndexes.Contains(x.Id)).ToList();

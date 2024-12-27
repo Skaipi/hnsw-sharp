@@ -122,6 +122,11 @@ namespace HNSW.Net
             {
                 neighbour.Connections[layer].Remove(node.Id);
             }
+
+            internal void DisconnectIncoming(Node node, Node neighbour, int layer)
+            {
+                neighbour.InConnections[layer].Remove(node.Id);
+            }
         }
 
     }
