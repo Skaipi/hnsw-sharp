@@ -124,7 +124,12 @@ namespace HNSW.Net
             _rwLock?.EnterReadLock();
             try
             {
-                return Graph.KNearest(item, k, filterItem, cancellationToken);
+                var result = Graph.KNearest(item, Math.Max(Graph.Parameters.MinNN, k), filterItem, cancellationToken);
+                if (Graph.Parameters.MinNN > k)
+                {
+                    return result.OrderBy(x => -x.Distance).Take(k).ToList();
+                }
+                return result;
             }
             finally
             {
@@ -202,9 +207,6 @@ namespace HNSW.Net
 
             var parameters = MessagePackSerializer.Deserialize<Parameters>(stream);
 
-            //Overwrite previous InitialDistanceCacheSize parameter, so we don't waste time/memory allocating a distance cache for an already existing graph
-            parameters.InitialDistanceCacheSize = 0;
-
             var world = new SmallWorld<TItem, TDistance>(distance, generator, parameters, threadSafe: threadSafe);
             world.Graph.Deserialize(items, stream);
             return world;
@@ -265,7 +267,6 @@ namespace HNSW.Net
                 ConstructionPruning = 200;
                 ExpandBestSelection = false;
                 KeepPrunedConnections = false;
-                InitialDistanceCacheSize = 1024 * 1024;
                 InitialItemsSize = 1024;
             }
 
@@ -292,6 +293,11 @@ namespace HNSW.Net
             public int ConstructionPruning { get; set; }
 
             /// <summary>
+            /// Gets or sets the minimal number of nodes obtained by knn search. If provided k exceeds this value, the search result will be trimmed to k. Improves recall for small k.
+            /// </summary>
+            public int MinNN { get; set; }
+
+            /// <summary>
             /// Gets or sets a value indicating whether to expand candidates if <see cref="NeighbourSelectionHeuristic.SelectHeuristic"/> is used. See 'extendCandidates' parameter in the article.
             /// </summary>
             public bool ExpandBestSelection { get; set; }
@@ -300,12 +306,6 @@ namespace HNSW.Net
             /// Gets or sets a value indicating whether to keep pruned candidates if <see cref="NeighbourSelectionHeuristic.SelectHeuristic"/> is used. See 'keepPrunedConnections' parameter in the article.
             /// </summary>
             public bool KeepPrunedConnections { get; set; }
-
-            /// <summary>
-            /// Gets or sets a the initial distance cache size. 
-            /// Note: This value is reset to 0 on deserialization to avoid allocating the distance cache for pre-built graphs.
-            /// </summary>
-            public int InitialDistanceCacheSize { get; set; }
 
             /// <summary>
             /// Gets or sets a the initial size of the Items list
