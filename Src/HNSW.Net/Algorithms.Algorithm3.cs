@@ -7,6 +7,7 @@ namespace HNSW.Net
 {
     using System;
     using System.Collections.Generic;
+    using System.Numerics;
 
     internal partial class Algorithms
     {
@@ -16,29 +17,31 @@ namespace HNSW.Net
         /// </summary>
         /// <typeparam name="TItem">The typeof the items in the small world.</typeparam>
         /// <typeparam name="TDistance">The type of the distance in the small world.</typeparam>
-        internal class Algorithm3<TItem, TDistance> : Algorithm<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+        internal class Algorithm3<TItem, TDistance> : Algorithm<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
         {
             public Algorithm3(Graph<TItem, TDistance>.Core graphCore) : base(graphCore)
             {
             }
 
             /// <inheritdoc/>
-            internal override List<int> SelectBestForConnecting(List<int> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
+            internal override List<int> SelectBestForConnecting(List<NodeDistance<TDistance>> candidatesIds, TravelingCosts<int, TDistance> travelingCosts, int layer)
             {
                 /*
                  * q ← this
                  * return M nearest elements from C to q
                  */
 
+
                 // !NO COPY! in-place selection
                 var bestN = GetM(layer);
-                var candidatesHeap = new BinaryHeap<int>(candidatesIds, travelingCosts);
+
+                var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(candidatesIds, GraphCore.FartherIsOnTop);
                 while (candidatesHeap.Buffer.Count > bestN)
                 {
-                    candidatesHeap.Pop();
+                    var discardedCandidate = candidatesHeap.Pop();
                 }
 
-                return candidatesHeap.Buffer;
+                return candidatesHeap.Buffer.ConvertAll(x => x.Id);
             }
         }
     }

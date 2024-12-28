@@ -13,7 +13,7 @@ namespace HNSW.Net.Tests
     using Microsoft.VisualStudio.TestTools.UnitTesting;
 
     /// <summary>
-    /// Tests for <see cref="SmallWorld{TItem, TDistance}"/>
+    /// Tests for <see cref="SmallWorld{TItem, float}"/>
     /// </summary>
     [TestClass]
     public class SmallWorldTests
@@ -83,11 +83,11 @@ namespace HNSW.Net.Tests
         /// Basic test for knn search - this test might fail sometimes, as the construction of the graph does not guarantee an exact answer
         /// </summary>
         [DataTestMethod]
-        [DataRow(false,false)]
-        [DataRow(false,true)]
+        [DataRow(false, false)]
+        [DataRow(false, true)]
         [DataRow(true, false)]
         [DataRow(true, true)]
-        public void KNNSearchTestAlgorithm4(bool expandBestSelection, bool keepPrunedConnections )
+        public void KNNSearchTestAlgorithm4(bool expandBestSelection, bool keepPrunedConnections)
         {
             var parameters = new SmallWorld<float[], float>.Parameters() { NeighbourHeuristic = NeighbourSelectionHeuristic.SelectHeuristic, ExpandBestSelection = expandBestSelection, KeepPrunedConnections = keepPrunedConnections };
             var graph = new SmallWorld<float[], float>(CosineDistance.NonOptimized, DefaultRandomGenerator.Instance, parameters);
@@ -109,6 +109,20 @@ namespace HNSW.Net.Tests
             }
             Assert.AreEqual(0, bestWrong);
             Assert.AreEqual(0, maxError, FloatError);
+        }
+
+        [TestMethod]
+        public void TestRemoval()
+        {
+            var parameters = new SmallWorld<float[], float>.Parameters();
+            var graph = new SmallWorld<float[], float>(CosineDistance.NonOptimized, DefaultRandomGenerator.Instance, parameters);
+            var ids = graph.AddItems(vectors);
+
+            var toRemove = vectors.Count / 5;
+            for (int i = 0; i < toRemove; i++)
+            {
+                graph.RemoveItem(ids[i]);
+            }
         }
 
         /// <summary>

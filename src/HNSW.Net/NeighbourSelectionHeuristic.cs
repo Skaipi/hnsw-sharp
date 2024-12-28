@@ -18,6 +18,8 @@ namespace HNSW.Net
         /// <summary>
         /// Marker for the Algorithm 4 (SELECT-NEIGHBORS-HEURISTIC) from the article. Implemented in <see cref="Algorithms.Algorithm4{TItem, TDistance}"/>
         /// </summary>
-        SelectHeuristic
+        SelectHeuristic,
+
+        CustomHeuristic
     }
 }

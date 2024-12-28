@@ -14,19 +14,24 @@ namespace HNSW.Net
 
     using static HNSW.Net.EventSources;
     using System.Threading;
+    using System.Numerics;
 
     /// <summary>
     /// The implementation of a hierarchical small world graph.
     /// </summary>
     /// <typeparam name="TItem">The type of items to connect into small world.</typeparam>
     /// <typeparam name="TDistance">The type of distance between items (expects any numeric type: float, double, decimal, int, ...).</typeparam>
-    internal partial class Graph<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+    internal partial class Graph<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         private readonly Func<TItem, TItem, TDistance> Distance;
 
         internal Core GraphCore;
 
         private Node? EntryPoint;
+
+        internal int MaxLayer => EntryPoint?.MaxLayer ?? 0;
+
+        internal object EntryLock = new object();
 
         private long _version;
 
@@ -65,7 +70,6 @@ namespace HNSW.Net
 
             var searcher = new Searcher(GraphCore);
             Func<int, int, TDistance> nodeDistance = GraphCore.GetDistance;
-            var neighboursIdsBuffer = new List<int>(GraphCore.Algorithm.GetM(0) + 1);
 
             for (int nodeId = startIndex; nodeId < GraphCore.Nodes.Count; ++nodeId)
             {
@@ -95,57 +99,123 @@ namespace HNSW.Net
                      */
 
                     // zoom in and find the best peer on the same level as newNode
-                    var bestPeer = entryPoint;
                     var currentNode = GraphCore.Nodes[nodeId];
                     var currentNodeTravelingCosts = new TravelingCosts<int, TDistance>(nodeDistance, nodeId);
-                    for (int layer = bestPeer.MaxLayer; layer > currentNode.MaxLayer; --layer)
-                    {
-                        searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, neighboursIdsBuffer, layer, 1, ref _version, versionNow, _ => true);
-                        bestPeer = GraphCore.Nodes[neighboursIdsBuffer[0]];
-                        neighboursIdsBuffer.Clear();
-                    }
+                    var bestPeer = FindEntryPoint(currentNode.MaxLayer, currentNodeTravelingCosts);
 
                     // connecting new node to the small world
                     for (int layer = Math.Min(currentNode.MaxLayer, entryPoint.MaxLayer); layer >= 0; --layer)
                     {
-                        searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, neighboursIdsBuffer, layer, Parameters.ConstructionPruning, ref _version, versionNow, _ => true);
-                        var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(neighboursIdsBuffer, currentNodeTravelingCosts, layer);
+                        var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, _ => true);
+                        var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(topCandidates, currentNodeTravelingCosts, layer);
 
                         for (int i = 0; i < bestNeighboursIds.Count; ++i)
                         {
                             int newNeighbourId = bestNeighboursIds[i];
+
                             versionNow = Interlocked.Increment(ref _version);
                             GraphCore.Algorithm.Connect(currentNode, GraphCore.Nodes[newNeighbourId], layer);
-                            
-                            versionNow = Interlocked.Increment(ref _version);
-                            GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
 
-                            // if distance from newNode to newNeighbour is better than to bestPeer => update bestPeer
-                            if (DistanceUtils.LowerThan(currentNodeTravelingCosts.From(newNeighbourId), currentNodeTravelingCosts.From(bestPeer.Id)))
+                            lock (GraphCore.NodesLocks[newNeighbourId])
                             {
-                                bestPeer = GraphCore.Nodes[newNeighbourId];
+                                versionNow = Interlocked.Increment(ref _version);
+                                GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
                             }
                         }
-
-                        neighboursIdsBuffer.Clear();
                     }
 
                     // zoom out to the highest level
                     if (currentNode.MaxLayer > entryPoint.MaxLayer)
                     {
                         entryPoint = currentNode;
+                        EntryPoint = entryPoint;
                     }
-
-                    // report distance cache hit rate
-                    GraphBuildEventSource.Instance?.CoreGetDistanceCacheHitRateReporter?.Invoke(GraphCore.DistanceCacheHitRate);
                 }
                 progressReporter?.Progress(nodeId - startIndex, GraphCore.Nodes.Count - startIndex);
             }
 
-            // construction is done
-            EntryPoint = entryPoint;
-
             return newIDs;
+        }
+
+        internal void RecomputeItemAtLayer(int nodeId, int layer, Node src)
+        {
+            var searcher = new Searcher(GraphCore);
+            Func<int, int, TDistance> nodeDistance = GraphCore.GetDistance;
+
+            var currentNode = GraphCore.Nodes[nodeId];
+            var currentNodeTravelingCosts = new TravelingCosts<int, TDistance>(nodeDistance, nodeId);
+            var bestPeer = FindEntryPoint(layer, currentNodeTravelingCosts);
+
+            var versionNow = Interlocked.Increment(ref _version);
+            var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, id => id != nodeId && id != src.Id);
+            var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(topCandidates, currentNodeTravelingCosts, layer);
+
+            for (int i = 0; i < bestNeighboursIds.Count; ++i)
+            {
+                int newNeighbourId = bestNeighboursIds[i];
+                versionNow = Interlocked.Increment(ref _version);
+                GraphCore.Algorithm.Connect(currentNode, GraphCore.Nodes[newNeighbourId], layer);
+
+                lock (GraphCore.NodesLocks[newNeighbourId])
+                {
+                    versionNow = Interlocked.Increment(ref _version);
+                    GraphCore.Algorithm.Connect(GraphCore.Nodes[newNeighbourId], currentNode, layer);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Removes items from the graph.
+        /// </summary>
+        /// <returns></returns>
+        internal int RemoveItem(int itemIndex)
+        {
+            if (GraphCore is null) { throw new Exception("Graph Core set to null reference"); }
+
+            var node = GraphCore.Nodes[itemIndex];
+            if (EntryPoint?.Id == itemIndex)
+            {
+                for (int layer = node.MaxLayer; layer >= 0; layer--)
+                {
+                    if (node[layer].Count > 0)
+                    {
+                        var neighbourId = node[layer].MaxBy(id => GraphCore.Nodes[id].Connections.Count);
+                        EntryPoint = GraphCore.Nodes[neighbourId];
+                    }
+                }
+            }
+
+            var maxLayer = Math.Min(EntryPoint?.MaxLayer ?? int.MaxValue, node.MaxLayer);
+            for (int layer_id = 0; layer_id <= maxLayer; layer_id++)
+            {
+                var mOnLayer = GraphCore.Algorithm.GetM(layer_id);
+                for (int j = 0; j < node.Connections[layer_id].Count; j++)
+                {
+                    var neighbourId = node.Connections[layer_id][j];
+                    var neighbourNode = GraphCore.Nodes[neighbourId];
+
+                    GraphCore.Algorithm.DisconnectIncoming(node, neighbourNode, layer_id);
+                    if (neighbourNode.Connections[layer_id].Count <= mOnLayer / 2 || neighbourNode.InConnections[layer_id].Count <= mOnLayer / 2)
+                    {
+                        RecomputeItemAtLayer(neighbourId, layer_id, node);
+                    }
+                }
+
+                for (int j = 0; j < node.InConnections[layer_id].Count; j++)
+                {
+                    var neighbourId = node.InConnections[layer_id][j];
+                    var neighbourNode = GraphCore.Nodes[neighbourId];
+                    GraphCore.Algorithm.Disconnect(node, neighbourNode, layer_id);
+                    if (neighbourNode.Connections[layer_id].Count <= mOnLayer / 2 || neighbourNode.InConnections[layer_id].Count <= mOnLayer / 2)
+                    {
+                        RecomputeItemAtLayer(neighbourId, layer_id, node);
+                    }
+                }
+            }
+            // Should I move it to GraphCore?
+            GraphCore.RemovedIndexes.Add(itemIndex);
+
+            return itemIndex;
         }
 
         /// <summary>
@@ -193,48 +263,28 @@ namespace HNSW.Net
                 {
                     using (new ScopeLatencyTracker(GraphSearchEventSource.Instance?.GraphKNearestLatencyReporter))
                     {
-                        var bestPeer = EntryPoint.Value;
                         var searcher = new Searcher(GraphCore);
                         var destinationTravelingCosts = new TravelingCosts<int, TDistance>(RuntimeDistance, -1);
-                        var resultIds = new List<int>(k + 1);
-
+                        var bestPeer = FindEntryPoint(0, destinationTravelingCosts);
                         int visitedNodesCount = 0;
 
-                        for (int layer = EntryPoint.Value.MaxLayer; layer > 0; --layer)
-                        {
-                            visitedNodesCount += searcher.RunKnnAtLayer(bestPeer.Id, destinationTravelingCosts, resultIds, layer, 1, ref _version, versionNow, keepResultInner, cancellationToken);
+                        var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, destinationTravelingCosts, 0, k, ref _version, versionNow, keepResultInner);
 
-                            if (cancellationToken.IsCancellationRequested)
-                            {
-                                //Return best so far - TODO: Investigate if this assumption is correct
-                                return resultIds.Select(id => new SmallWorld<TItem, TDistance>.KNNSearchResult(id, GraphCore.Items[id], RuntimeDistance(id, -1))).ToList();
-                            }
-
-                            if (resultIds.Count > 0)
-                            {
-                                bestPeer = GraphCore.Nodes[resultIds[0]];
-                            }
-
-                            resultIds.Clear();
-                        }
-
-                        visitedNodesCount += searcher.RunKnnAtLayer(bestPeer.Id, destinationTravelingCosts, resultIds, 0, k, ref _version, versionNow, keepResultInner, cancellationToken);
-                        
                         GraphSearchEventSource.Instance?.GraphKNearestVisitedNodesReporter?.Invoke(visitedNodesCount);
 
-                        return resultIds.Select(id => new SmallWorld<TItem, TDistance>.KNNSearchResult(id, GraphCore.Items[id], RuntimeDistance(id, -1))).ToList();
+                        return topCandidates.ConvertAll(c => new SmallWorld<TItem, TDistance>.KNNSearchResult(c.Id, GraphCore.Items[c.Id], c.Dist)).ToList();
                     }
                 }
                 catch (GraphChangedException)
                 {
-                    if(retries > 0)
+                    if (retries > 0)
                     {
-                        retries--; 
+                        retries--;
                         continue;
                     }
                     throw;
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                     if (versionNow != Interlocked.Read(ref _version))
                     {
@@ -247,6 +297,40 @@ namespace HNSW.Net
                     throw;
                 }
             }
+        }
+
+        private Node FindEntryPoint(int dstLayer, TravelingCosts<int, TDistance> dstTravelingCost)
+        {
+            var bestPeer = EntryPoint ?? GraphCore.Nodes[0];
+            var currDist = dstTravelingCost.From(bestPeer.Id);
+
+            for (int level = bestPeer.MaxLayer; level > dstLayer; level--)
+            {
+                bool changed = true;
+                while (changed)
+                {
+                    changed = false;
+                    lock (GraphCore.NodesLocks[bestPeer.Id])
+                    {
+                        List<int> connections = bestPeer.Connections[level];
+                        int size = connections.Count;
+
+                        for (int i = 0; i < size; i++)
+                        {
+                            int cand = connections[i];
+                            var d = dstTravelingCost.From(cand);
+                            if (d < currDist)
+                            {
+                                currDist = d;
+                                bestPeer = GraphCore.Nodes[cand];
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return bestPeer;
         }
 
         /// <summary>

@@ -7,10 +7,9 @@ namespace HNSW.Net
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
-    using System.Diagnostics.CodeAnalysis;
     using System.IO;
     using System.Linq;
+    using System.Numerics;
     using System.Threading;
     using MessagePack;
     using MessagePackCompat;
@@ -20,7 +19,7 @@ namespace HNSW.Net
     /// </summary>
     /// <typeparam name="TItem">The type of items to connect into small world.</typeparam>
     /// <typeparam name="TDistance">The type of distance between items (expect any numeric type: float, double, decimal, int, ...).</typeparam>
-    public partial class SmallWorld<TItem, TDistance> where TDistance : struct, IComparable<TDistance>
+    public partial class SmallWorld<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         private const string SERIALIZATION_HEADER = "HNSW";
         private readonly Func<TItem, TItem, TDistance> Distance;
@@ -34,13 +33,13 @@ namespace HNSW.Net
         /// Gets the list of items currently held by the SmallWorld graph. 
         /// The list is not protected by any locks, and should only be used when it is known the graph won't change
         /// </summary>
-        public IReadOnlyList<TItem> UnsafeItems => Graph?.GraphCore?.Items;
+        public IReadOnlyDictionary<int, TItem> UnsafeItems => Graph?.GraphCore?.Items;
 
         /// <summary>
         /// Gets a copy of the list of items currently held by the SmallWorld graph. 
         /// This call is protected by a read-lock and is safe to be called from multiple threads.
         /// </summary>
-        public IReadOnlyList<TItem> Items
+        public IReadOnlyDictionary<int, TItem> Items
         {
             get
             {
@@ -49,7 +48,7 @@ namespace HNSW.Net
                     _rwLock.EnterReadLock();
                     try
                     {
-                        return Graph.GraphCore.Items.ToList();
+                        return Graph.GraphCore.Items;
                     }
                     finally
                     {
@@ -88,7 +87,23 @@ namespace HNSW.Net
             _rwLock?.EnterWriteLock();
             try
             {
-               return Graph.AddItems(items, Generator, progressReporter);
+                return Graph.AddItems(items, Generator, progressReporter);
+            }
+            finally
+            {
+                _rwLock?.ExitWriteLock();
+            }
+        }
+
+        /// <summary>
+        /// Removes item from the hnsw graph
+        /// </summary>
+        public void RemoveItem(int itemIndex)
+        {
+            _rwLock?.EnterWriteLock();
+            try
+            {
+                Graph.RemoveItem(itemIndex);
             }
             finally
             {
@@ -109,7 +124,12 @@ namespace HNSW.Net
             _rwLock?.EnterReadLock();
             try
             {
-                return Graph.KNearest(item, k, filterItem, cancellationToken);
+                var result = Graph.KNearest(item, Math.Max(Graph.Parameters.MinNN, k), filterItem, cancellationToken);
+                if (Graph.Parameters.MinNN > k)
+                {
+                    return result.OrderBy(x => -x.Distance).Take(k).ToList();
+                }
+                return result;
             }
             finally
             {
@@ -170,9 +190,9 @@ namespace HNSW.Net
             {
                 hnswHeader = MessagePackBinary.ReadString(stream);
             }
-            catch(Exception E)
+            catch (Exception E)
             {
-                if(stream.CanSeek) { stream.Position = p0; } //Resets the stream to original position
+                if (stream.CanSeek) { stream.Position = p0; } //Resets the stream to original position
                 throw new InvalidDataException($"Invalid header found in stream, data is corrupted or invalid", E);
             }
 
@@ -186,9 +206,6 @@ namespace HNSW.Net
             //                     see https://github.com/neuecc/MessagePack-CSharp/pull/663
 
             var parameters = MessagePackSerializer.Deserialize<Parameters>(stream);
-
-            //Overwrite previous InitialDistanceCacheSize parameter, so we don't waste time/memory allocating a distance cache for an already existing graph
-            parameters.InitialDistanceCacheSize = 0;
 
             var world = new SmallWorld<TItem, TDistance>(distance, generator, parameters, threadSafe: threadSafe);
             world.Graph.Deserialize(items, stream);
@@ -204,15 +221,42 @@ namespace HNSW.Net
             return Graph.Print();
         }
 
-        /// <summary>
-        /// Frees the memory used by the Distance Cache
-        /// </summary>
-        public void ResizeDistanceCache(int newSize)
+        public void PrintStats()
         {
-            Graph.GraphCore.ResizeDistanceCache(newSize);
+            var maxLayer = Graph.MaxLayer;
+            Console.WriteLine($"Graph max layer: {maxLayer}\n");
+
+            for (int layer = maxLayer; layer >= 0; layer--)
+            {
+                var M = Graph.GraphCore.Algorithm.GetM(layer);
+                var nodesOnLayer = Graph.GraphCore.Nodes.Where(x => x.MaxLayer >= layer && !Graph.GraphCore.RemovedIndexes.Contains(x.Id)).ToList();
+                Console.WriteLine($"Nodes on layer {layer}: {nodesOnLayer.Count}");
+
+                var minOutConn = nodesOnLayer.Min(x => x.Connections[layer].Count);
+                var maxOutConn = nodesOnLayer.Max(x => x.Connections[layer].Count);
+                var avgOutConn = nodesOnLayer.Average(x => x.Connections[layer].Count);
+                var outConnAboveM = nodesOnLayer.Where(x => x.Connections[layer].Count == M).ToList().Count;
+
+                Console.WriteLine($"  Minimal outgoing connections: {minOutConn}");
+                Console.WriteLine($"  Maximal outgoing connections: {maxOutConn}");
+                Console.WriteLine($"  Average outgoing connections: {avgOutConn}");
+                Console.WriteLine($"  Elements with numeber of outgoing equal M: {outConnAboveM}");
+                Console.WriteLine();
+
+                var minInConn = nodesOnLayer.Min(x => x.InConnections[layer].Count);
+                var maxInConn = nodesOnLayer.Max(x => x.InConnections[layer].Count);
+                var avgInConn = nodesOnLayer.Average(x => x.InConnections[layer].Count);
+                var inConnAboveM = nodesOnLayer.Where(x => x.InConnections[layer].Count > M).ToList().Count;
+
+                Console.WriteLine($"  Minimal incoming connections: {minInConn}");
+                Console.WriteLine($"  Maximal incoming connections: {maxInConn}");
+                Console.WriteLine($"  Average incoming connections: {avgInConn}");
+                Console.WriteLine($"  Elements with numeber of incoming connections above M: {inConnAboveM}");
+                Console.WriteLine();
+            }
         }
 
-        [MessagePackObject(keyAsPropertyName:true)]
+        [MessagePackObject(keyAsPropertyName: true)]
         public class Parameters
         {
             public Parameters()
@@ -223,8 +267,6 @@ namespace HNSW.Net
                 ConstructionPruning = 200;
                 ExpandBestSelection = false;
                 KeepPrunedConnections = false;
-                EnableDistanceCacheForConstruction = true;
-                InitialDistanceCacheSize = 1024 * 1024;
                 InitialItemsSize = 1024;
             }
 
@@ -251,6 +293,11 @@ namespace HNSW.Net
             public int ConstructionPruning { get; set; }
 
             /// <summary>
+            /// Gets or sets the minimal number of nodes obtained by knn search. If provided k exceeds this value, the search result will be trimmed to k. Improves recall for small k.
+            /// </summary>
+            public int MinNN { get; set; }
+
+            /// <summary>
             /// Gets or sets a value indicating whether to expand candidates if <see cref="NeighbourSelectionHeuristic.SelectHeuristic"/> is used. See 'extendCandidates' parameter in the article.
             /// </summary>
             public bool ExpandBestSelection { get; set; }
@@ -259,17 +306,6 @@ namespace HNSW.Net
             /// Gets or sets a value indicating whether to keep pruned candidates if <see cref="NeighbourSelectionHeuristic.SelectHeuristic"/> is used. See 'keepPrunedConnections' parameter in the article.
             /// </summary>
             public bool KeepPrunedConnections { get; set; }
-
-            /// <summary>
-            /// Gets or sets a value indicating whether to cache calculated distances at graph construction time.
-            /// </summary>
-            public bool EnableDistanceCacheForConstruction { get; set; }
-
-            /// <summary>
-            /// Gets or sets a the initial distance cache size. 
-            /// Note: This value is reset to 0 on deserialization to avoid allocating the distance cache for pre-built graphs.
-            /// </summary>
-            public int InitialDistanceCacheSize { get; set; }
 
             /// <summary>
             /// Gets or sets a the initial size of the Items list
