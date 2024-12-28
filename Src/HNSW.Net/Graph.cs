@@ -147,7 +147,7 @@ namespace HNSW.Net
             var bestPeer = FindEntryPoint(layer, currentNodeTravelingCosts);
 
             var versionNow = Interlocked.Increment(ref _version);
-            var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, id => id != nodeId);
+            var topCandidates = searcher.RunKnnAtLayer(bestPeer.Id, currentNodeTravelingCosts, layer, Parameters.ConstructionPruning, ref _version, versionNow, id => id != nodeId && id != src.Id);
             var bestNeighboursIds = GraphCore.Algorithm.SelectBestForConnecting(topCandidates, currentNodeTravelingCosts, layer);
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
@@ -188,13 +188,14 @@ namespace HNSW.Net
             var maxLayer = Math.Min(EntryPoint?.MaxLayer ?? int.MaxValue, node.MaxLayer);
             for (int layer_id = 0; layer_id <= maxLayer; layer_id++)
             {
+                var mOnLayer = GraphCore.Algorithm.GetM(layer_id);
                 for (int j = 0; j < node.Connections[layer_id].Count; j++)
                 {
                     var neighbourId = node.Connections[layer_id][j];
                     var neighbourNode = GraphCore.Nodes[neighbourId];
 
                     GraphCore.Algorithm.DisconnectIncoming(node, neighbourNode, layer_id);
-                    if (neighbourNode.Connections[layer_id].Count == 0 || neighbourNode.InConnections[layer_id].Count == 0)
+                    if (neighbourNode.Connections[layer_id].Count <= mOnLayer / 2 || neighbourNode.InConnections[layer_id].Count <= mOnLayer / 2)
                     {
                         RecomputeItemAtLayer(neighbourId, layer_id, node);
                     }
@@ -205,7 +206,7 @@ namespace HNSW.Net
                     var neighbourId = node.InConnections[layer_id][j];
                     var neighbourNode = GraphCore.Nodes[neighbourId];
                     GraphCore.Algorithm.Disconnect(node, neighbourNode, layer_id);
-                    if (neighbourNode.Connections[layer_id].Count == 0 || neighbourNode.InConnections[layer_id].Count == 0)
+                    if (neighbourNode.Connections[layer_id].Count <= mOnLayer / 2 || neighbourNode.InConnections[layer_id].Count <= mOnLayer / 2)
                     {
                         RecomputeItemAtLayer(neighbourId, layer_id, node);
                     }
